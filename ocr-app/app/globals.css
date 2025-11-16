@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes stamp {
+  0% {
+    transform: rotate(-12deg) scale(0) translateY(-100px);
+    opacity: 0;
+  }
+  50% {
+    transform: rotate(-12deg) scale(1.2) translateY(0);
+    opacity: 0.3;
+  }
+  100% {
+    transform: rotate(-12deg) scale(1) translateY(0);
+    opacity: 0.2;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Coffee stain decorations */
+.coffee-stain {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, 
+    rgba(139, 90, 43, 0.15) 0%, 
+    rgba(139, 90, 43, 0.1) 40%, 
+    transparent 70%
+  );
+  pointer-events: none;
+}
