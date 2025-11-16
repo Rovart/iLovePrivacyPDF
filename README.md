@@ -19,6 +19,7 @@ A **privacy-first**, high-performance document processing application built with
 | **Markdown → PDF** | .md files | PDF | Convert markdown to formatted PDF (offline) |
 | **Merge PDFs** | Multiple PDFs | Single PDF | Combine PDF documents (no upload required) |
 | **Images → PDF** | Multiple images | Single PDF | Create PDF from image sequence (private) |
+| **PDF → Images** | PDF | Images | Export each page of a PDF as images (private) |
 
 ### 🎨 User Interface
 - **Dark/Light Mode**: Full theme support with vintage aesthetic
