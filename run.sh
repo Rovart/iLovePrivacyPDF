@@ -1,7 +1,11 @@
 
 #!/bin/bash
-# Ensure stop.sh is executed on exit
-trap './stop.sh' EXIT
+
+# Get the script directory (root of project)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Ensure stop.sh is executed on exit using absolute path
+trap "$SCRIPT_DIR/stop.sh" EXIT
 
 # iLovePrivacyPDF - Run Script
 # Privacy-first document processing - runs locally on your machine
@@ -125,24 +129,6 @@ fi
 echo ""
 echo -e "${BLUE}Press Ctrl+C to stop the server${NC}"
 echo ""
-
-cd ocr-app
-
-# Always build if --rebuild flag is passed, or if .next does not exist
-if [ "$1" = "--rebuild" ] || [ ! -d ".next" ]; then
-    echo -e "${BLUE}Building Next.js application for production...${NC}"
-    npm run build
-    echo -e "${GREEN}✓ Production build complete${NC}"
-    echo ""
-fi
-
-# Start production server
-echo -e "${GREEN}🚀 Starting production server...${NC}"
-npm run start
-
-cd ..
-
-npm run start
 
 cd ocr-app
 

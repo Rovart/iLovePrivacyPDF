@@ -60,6 +60,9 @@ ocr-app/public/output/*
 ocr-app/public/outputs/*
 ocr-app/public/temp_images/*
 
+# History file (contains user document metadata)
+ocr-app/public/outputs/.history.json
+
 # Keep the directories but not their contents
 !ocr-app/public/uploads/.gitkeep
 !ocr-app/public/output/.gitkeep

@@ -20,6 +20,7 @@ A **privacy-first**, high-performance document processing application built with
 | **Merge PDFs** | Multiple PDFs | Single PDF | Combine PDF documents (no upload required) |
 | **Images → PDF** | Multiple images | Single PDF | Create PDF from image sequence (private) |
 | **PDF → Images** | PDF | Images | Export each page of a PDF as images (private) |
+| **📜 History** | - | Previous outputs | Download any previously processed documents |
 
 ### 🎨 User Interface
 - **Dark/Light Mode**: Full theme support with vintage aesthetic
@@ -28,6 +29,7 @@ A **privacy-first**, high-performance document processing application built with
 - **Responsive Design**: Works on desktop, tablet, and mobile
 - **Paper & Ink Theme**: Distinctive vintage aesthetic avoiding generic templates
 - **Privacy-Focused**: No external connections, all processing is local
+- **📜 Document History**: Server-side history with automatic file verification (persistent across app restarts)
 
 ### � Privacy & Security
 - **100% Local Processing**: All OCR and document processing happens on your machine
@@ -177,6 +179,14 @@ Open: **http://localhost:3000**
 - **Custom Prompts** (Ollama only): Add instructions to improve OCR quality
 - **Batch Processing**: Process multiple images/PDFs at once
 
+### History Mode Features
+
+- **Server-Side Persistence**: History stored on server (survives app restarts)
+- **Automatic Cleanup**: Removes history entries for deleted files
+- **Quick Download**: Re-download any previously processed document
+- **Delete Individual Items**: Remove unwanted entries from history
+- **Clear All**: Bulk delete all history at once
+
 ## 🏗️ Architecture
 
 ### Tech Stack
@@ -208,15 +218,17 @@ iLovePrivacyPDF/
 └── ocr-app/                # Next.js web app
     ├── app/
     │   ├── api/            # API endpoints
-    │   │   ├── process-stream/
-    │   │   ├── convert-markdown/
-    │   │   ├── merge-pdfs/
-    │   │   └── images-to-pdf/
+    │   │   ├── process-stream/     # OCR streaming
+    │   │   ├── convert-markdown/   # MD → PDF
+    │   │   ├── merge-pdfs/         # PDF merge
+    │   │   ├── images-to-pdf/      # Images → PDF
+    │   │   ├── pdf-to-images/      # PDF → Images
+    │   │   └── history/            # Document history API
     │   ├── page.tsx        # Main UI
     │   └── layout.tsx      # Layout
     ├── public/
     │   ├── uploads/        # Uploaded files (gitignored)
-    │   └── outputs/        # Generated files (gitignored)
+    │   └── outputs/        # Generated files & history (gitignored)
     ├── package.json
     └── tsconfig.json
 ```
@@ -295,6 +307,19 @@ Create PDF from images.
 - `files`: Image files (order matters)
 
 **Response**: JSON with PDF URL
+
+### GET/POST/DELETE/PUT `/api/history`
+Manage document processing history.
+
+**GET**: Load all history items (auto-verifies file existence)
+
+**POST**: Add new item to history
+- Body: `{ item: { mode, markdownUrl?, pdfUrl?, images? } }`
+
+**DELETE**: Remove item by ID
+- Query: `?id=<item-id>`
+
+**PUT**: Clear all history
 
 ## 🎨 Design
 

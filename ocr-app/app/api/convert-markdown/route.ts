@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
+import { writeFile, mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { exec } from 'child_process';
@@ -52,6 +52,15 @@ export async function POST(request: NextRequest) {
 
     // Return URL to download PDF
     const pdfFilename = outputPdf.split('/').pop();
+    
+    // Clean up uploaded markdown file after successful processing
+    try {
+      await unlink(inputPath);
+      console.log('Cleaned up uploaded markdown file');
+    } catch (cleanupError) {
+      console.error('Error cleaning up uploaded file:', cleanupError);
+    }
+    
     return NextResponse.json({
       success: true,
       pdf_url: `/api/serve-image?path=output/${pdfFilename}&t=${Date.now()}`,

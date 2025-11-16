@@ -362,6 +362,17 @@ export async function POST(request: NextRequest) {
           pdf_url: `/api/serve-image?path=outputs/${outputPdf.split('/').pop()}&t=${Date.now()}`,
         })}\n\n`));
 
+        // Clean up uploaded files after successful processing
+        try {
+          for (const filePath of savedFiles) {
+            await unlink(filePath);
+          }
+          console.log('Cleaned up uploaded files');
+        } catch (cleanupError) {
+          console.error('Error cleaning up uploaded files:', cleanupError);
+          // Don't fail the request if cleanup fails
+        }
+
         // Auto-unload: Stop server to free VRAM after processing
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({
           status: 'cleanup',

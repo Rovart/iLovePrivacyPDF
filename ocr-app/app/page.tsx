@@ -26,6 +26,16 @@ type FileWithPreview = {
   id: string;
 };
 
+type HistoryItem = {
+  id: string;
+  timestamp: string;
+  mode: string;
+  markdownUrl?: string;
+  pdfUrl?: string;
+  images?: string[];
+  imageCount?: number;
+};
+
 // Sortable file item component
 function SortableFileItem({ item, index, onRemove, darkMode }: { item: FileWithPreview; index: number; onRemove: (index: number) => void; darkMode: boolean }) {
   const {
@@ -217,7 +227,7 @@ async function downloadAllImages(images: string[], timestamp?: string) {
 
 export default function Home() {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
-  const [mode, setMode] = useState<'ocr' | 'markdown' | 'merge' | 'images-to-pdf'>('ocr');
+  const [mode, setMode] = useState<'ocr' | 'markdown' | 'merge' | 'images-to-pdf' | 'history'>('ocr');
   const [imagePdfMode, setImagePdfMode] = useState<'images-to-pdf' | 'pdf-to-images'>('images-to-pdf');
   const [useCoordinates, setUseCoordinates] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -238,6 +248,8 @@ export default function Home() {
   const [modelsError, setModelsError] = useState<string>('');
   const [popplerInstalled, setPopplerInstalled] = useState<boolean>(true);
   const [popplerError, setPopplerError] = useState<string>('');
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -338,6 +350,96 @@ export default function Home() {
     fetchModels();
     checkDependencies();
   }, []);
+
+  // Load history from localStorage and verify which files still exist
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        // Load history from server
+        const response = await fetch('/api/history');
+        const data = await response.json();
+        
+        if (data.success && data.history) {
+          setHistory(data.history);
+          console.log('Loaded history from server:', data.history.length, 'items');
+        } else {
+          console.error('Failed to load history:', data.error);
+          setHistory([]);
+        }
+      } catch (error) {
+        console.error('Failed to load history:', error);
+        setHistory([]);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+
+    loadHistory();
+  }, []);
+
+  // Save to history
+  const saveToHistory = async (item: Omit<HistoryItem, 'id' | 'timestamp'>) => {
+    try {
+      const response = await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success && data.item) {
+        // Add the new item to local state
+        setHistory(prev => [data.item, ...prev].slice(0, 50));
+        console.log('Saved history item to server:', data.item);
+      } else {
+        console.error('Failed to save history:', data.error);
+      }
+    } catch (error) {
+      console.error('Error saving history:', error);
+    }
+  };
+
+  // Delete history item
+  const deleteHistoryItem = async (id: string) => {
+    try {
+      const response = await fetch(`/api/history?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Remove from local state
+        setHistory(prev => prev.filter(item => item.id !== id));
+        console.log('Deleted history item from server');
+      } else {
+        console.error('Failed to delete history:', data.error);
+      }
+    } catch (error) {
+      console.error('Error deleting history:', error);
+    }
+  };
+
+  // Clear all history
+  const clearHistory = async () => {
+    try {
+      const response = await fetch('/api/history', {
+        method: 'PUT',
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setHistory([]);
+        console.log('Cleared all history from server');
+      } else {
+        console.error('Failed to clear history:', data.error);
+      }
+    } catch (error) {
+      console.error('Error clearing history:', error);
+    }
+  };
 
   // Clear files when switching modes or sub-modes
   useEffect(() => {
@@ -442,6 +544,13 @@ export default function Home() {
                     markdown: data.markdown_url,
                     pdf: data.pdf_url,
                   });
+                  
+                  // Save to history
+                  saveToHistory({
+                    mode: 'ocr',
+                    markdownUrl: data.markdown_url,
+                    pdfUrl: data.pdf_url,
+                  });
                 } else if (data.error) {
                   setStatus(`Error: ${data.error}`);
                 } else {
@@ -472,6 +581,13 @@ export default function Home() {
             markdown: data.markdown_url,
             pdf: data.pdf_url,
           });
+          
+          // Save to history
+          saveToHistory({
+            mode: 'markdown',
+            markdownUrl: data.markdown_url,
+            pdfUrl: data.pdf_url,
+          });
         } else {
           setStatus(`Error: ${data.error}`);
         }
@@ -489,6 +605,12 @@ export default function Home() {
           setProgress(100);
           setDownloadLinks({
             pdf: data.pdf_url,
+          });
+          
+          // Save to history
+          saveToHistory({
+            mode: 'merge',
+            pdfUrl: data.pdf_url,
           });
         } else {
           setStatus(`Error: ${data.error}`);
@@ -511,6 +633,13 @@ export default function Home() {
             setDownloadLinks({
               images: data.images, // Array of image URLs
               count: data.count
+            });
+            
+            // Save to history
+            saveToHistory({
+              mode: 'pdf-to-images',
+              images: data.images,
+              imageCount: data.count,
             });
           } else {
             // Check if it's a missing dependency error
@@ -536,6 +665,12 @@ export default function Home() {
             setProgress(100);
             setDownloadLinks({
               pdf: data.pdf_url,
+            });
+            
+            // Save to history
+            saveToHistory({
+              mode: 'images-to-pdf',
+              pdfUrl: data.pdf_url,
             });
           } else {
             setStatus(`Error: ${data.error}`);
@@ -680,6 +815,19 @@ export default function Home() {
                     : 'bg-[#f4f1e8] text-[#1a1a1a] border-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f4f1e8]'
               }`}>
               <span className="relative z-10">Images ↔ PDF</span>
+            </button>
+            <button
+              onClick={() => setMode('history')}
+              className={`px-6 py-3 border-2 font-mono uppercase tracking-wider text-sm transition-all ${
+                mode === 'history'
+                  ? darkMode 
+                    ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]' 
+                    : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
+                  : darkMode
+                    ? 'bg-[#2a2a2a] text-[#ccc] border-[#444] hover:bg-[#3a3a3a] hover:text-[#ffd700]'
+                    : 'bg-[#f4f1e8] text-[#1a1a1a] border-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f4f1e8]'
+              }`}>
+              <span className="relative z-10">📜 History</span>
             </button>
           </div>
 
@@ -923,6 +1071,123 @@ export default function Home() {
             <div className="coffee-stain absolute top-32 right-1/3 w-12 h-12" 
               style={{ opacity: 0.25, transform: 'rotate(120deg)' }} />
 
+            {/* History View */}
+            {mode === 'history' ? (
+              <div className="relative z-10">
+                <div className={`flex justify-between items-center mb-6 ${darkMode ? 'text-[#ffd700]' : 'text-[#1a1a1a]'}`}>
+                  <h2 className="text-2xl font-bold font-mono">Document History</h2>
+                  {history.length > 0 && (
+                    <button
+                      onClick={clearHistory}
+                      className={`px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider transition-all ${
+                        darkMode
+                          ? 'bg-[#c73e1d] text-[#f4f1e8] border-[#666] hover:bg-[#ffd700] hover:text-[#1a1a1a]'
+                          : 'bg-[#c73e1d] text-[#f4f1e8] border-[#1a1a1a] hover:bg-[#1a1a1a]'
+                      }`}>
+                      Clear All History
+                    </button>
+                  )}
+                </div>
+
+                {loadingHistory ? (
+                  <div className={`text-center py-12 font-mono ${darkMode ? 'text-[#ccc]' : 'text-[#666]'}`}>
+                    Loading history...
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className={`text-center py-12 font-mono ${darkMode ? 'text-[#ccc]' : 'text-[#666]'}`}>
+                    <FileText className={`w-16 h-16 mx-auto mb-4 opacity-50 ${darkMode ? 'text-[#666]' : 'text-[#999]'}`} />
+                    <p>No documents in history</p>
+                    <p className="text-sm mt-2">Processed documents will appear here</p>
+                  </div>
+                ) : (
+                  <div className={`max-h-[600px] overflow-y-auto border-2 p-4 ${
+                    darkMode
+                      ? 'border-[#444] bg-[rgba(255,255,255,0.05)]'
+                      : 'border-[#d4d0c5] bg-[rgba(255,255,255,0.4)]'
+                  }`}>
+                    {history.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`mb-4 p-4 border-2 border-l-4 shadow-[2px_2px_0_rgba(0,0,0,0.1)] transition-transform hover:translate-x-1 ${
+                          darkMode
+                            ? 'bg-[#3a3a3a] border-[#555] border-l-[#ffd700]'
+                            : 'bg-[#f4f1e8] border-[#d4d0c5] border-l-[#d4af37]'
+                        }`}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className={`font-mono text-xs uppercase tracking-wider ${
+                              darkMode ? 'text-[#ffd700]' : 'text-[#2d4f7c]'
+                            }`}>
+                              {item.mode === 'ocr' ? 'OCR Processing' :
+                               item.mode === 'markdown' ? 'Markdown Conversion' :
+                               item.mode === 'merge' ? 'PDF Merge' :
+                               item.mode === 'pdf-to-images' ? 'PDF to Images' :
+                               item.mode === 'images-to-pdf' ? 'Images to PDF' : item.mode}
+                            </div>
+                            <div className={`font-mono text-xs mt-1 ${
+                              darkMode ? 'text-[#999]' : 'text-[#666]'
+                            }`}>
+                              {new Date(item.timestamp).toLocaleString()}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => deleteHistoryItem(item.id)}
+                            className={`px-3 py-1 border font-mono text-xs uppercase tracking-wider transition-all ${
+                              darkMode
+                                ? 'bg-[#c73e1d] text-[#f4f1e8] border-[#666] hover:bg-[#ffd700] hover:text-[#1a1a1a]'
+                                : 'bg-[#c73e1d] text-[#f4f1e8] border-[#1a1a1a] hover:bg-[#1a1a1a]'
+                            }`}>
+                            Delete
+                          </button>
+                        </div>
+
+                        <div className="flex gap-2 flex-wrap">
+                          {item.markdownUrl && (
+                            <a
+                              href={item.markdownUrl}
+                              download
+                              className={`px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[3px_3px_0_rgba(0,0,0,0.3)] transition-all ${
+                                darkMode
+                                  ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700] hover:bg-[#ff8c00]'
+                                  : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a] hover:bg-[#c73e1d]'
+                              }`}>
+                              📄 Markdown
+                            </a>
+                          )}
+                          {item.pdfUrl && (
+                            <a
+                              href={item.pdfUrl}
+                              download
+                              className={`px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[3px_3px_0_rgba(0,0,0,0.3)] transition-all ${
+                                darkMode
+                                  ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700] hover:bg-[#ff8c00]'
+                                  : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a] hover:bg-[#c73e1d]'
+                              }`}>
+                              📕 PDF
+                            </a>
+                          )}
+                          {item.images && item.images.length > 0 && (
+                            <button
+                              onClick={() => {
+                                const timestamp = new Date(item.timestamp).toISOString().replace(/:/g, '-').substring(0, 19);
+                                downloadAllImages(item.images!, timestamp);
+                              }}
+                              className={`px-4 py-2 border-2 font-mono text-xs uppercase tracking-wider shadow-[2px_2px_0_rgba(0,0,0,0.2)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[3px_3px_0_rgba(0,0,0,0.3)] transition-all ${
+                                darkMode
+                                  ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700] hover:bg-[#ff8c00]'
+                                  : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a] hover:bg-[#c73e1d]'
+                              }`}>
+                              🖼️ Images ({item.images.length})
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
             {/* OCR Server Warning */}
             {mode === 'ocr' && !modelsLoading && !availableModels.some(m => m.status === 'available') && (
               <div className={`mb-6 p-4 border-2 rounded font-mono text-sm ${
@@ -1240,6 +1505,8 @@ export default function Home() {
                   </div>
                 )}
               </div>
+            )}
+            </>
             )}
           </div>
         </div>

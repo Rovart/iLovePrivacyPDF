@@ -112,6 +112,18 @@ export async function POST(request: NextRequest) {
     // Return URLs to download files
     const markdownFilename = outputMarkdown.split('/').pop();
     const pdfFilename = outputPdf.split('/').pop();
+    
+    // Clean up uploaded files after successful processing
+    try {
+      for (const filePath of savedFiles) {
+        await unlink(filePath);
+      }
+      console.log('Cleaned up uploaded files');
+    } catch (cleanupError) {
+      console.error('Error cleaning up uploaded files:', cleanupError);
+      // Don't fail the request if cleanup fails
+    }
+    
     return NextResponse.json({
       success: true,
       fallback: usedFallback,
