@@ -61,6 +61,8 @@ A **privacy-first**, high-performance document processing application built with
 
 The application uses **locally-hosted** OCR models (no cloud API calls):
 
+> **⭐ Recommended**: Use **NexaAI DeepSeek-OCR** for the best accuracy and performance. It's optimized for document processing and works offline.
+
 #### NexaAI DeepSeek-OCR (Recommended)
 ```bash
 # Install Nexa CLI
