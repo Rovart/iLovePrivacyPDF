@@ -580,7 +580,7 @@ export default function Home() {
 
           {/* Header */}
           <div className="text-center mb-12 animate-fadeInUp">
-            <h1 className={`text-6xl font-bold mb-2 tracking-tight uppercase ${
+            <h1 className={`text-6xl font-bold mb-2 tracking-tight ${
               darkMode
                 ? 'text-[#ffd700]'
                 : 'text-[#1a1a1a]'

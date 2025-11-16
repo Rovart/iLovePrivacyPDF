@@ -1,4 +1,7 @@
+
 #!/bin/bash
+# Ensure stop.sh is executed on exit
+trap './stop.sh' EXIT
 
 # iLovePrivacyPDF - Run Script
 # Privacy-first document processing - runs locally on your machine
@@ -125,7 +128,25 @@ echo ""
 
 cd ocr-app
 
-# Build for production if not already built or if --rebuild flag is passed
+# Always build if --rebuild flag is passed, or if .next does not exist
+if [ "$1" = "--rebuild" ] || [ ! -d ".next" ]; then
+    echo -e "${BLUE}Building Next.js application for production...${NC}"
+    npm run build
+    echo -e "${GREEN}✓ Production build complete${NC}"
+    echo ""
+fi
+
+# Start production server
+echo -e "${GREEN}🚀 Starting production server...${NC}"
+npm run start
+
+cd ..
+
+npm run start
+
+cd ocr-app
+
+# Always build if --rebuild flag is passed, or if .next does not exist
 if [ "$1" = "--rebuild" ] || [ ! -d ".next" ]; then
     echo -e "${BLUE}Building Next.js application for production...${NC}"
     npm run build
