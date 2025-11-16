@@ -66,9 +66,14 @@ The application uses **locally-hosted** OCR models (no cloud API calls):
 # Install Nexa CLI
 pipx install nexa
 
+# Download and cache the OCR model locally
+nexa infer NexaAI/DeepSeek-OCR-GGUF
+
 # Start server (runs locally on your machine)
 nexa serve --host 127.0.0.1:18181
 ```
+
+**Note**: The first time you run `nexa infer`, it will download the DeepSeek-OCR model (~3-4GB) and cache it locally. Subsequent starts will be instant.
 
 #### Ollama
 ```bash
@@ -89,7 +94,7 @@ ollama serve
 The project includes an `install.sh` script that automatically installs all dependencies:
 
 ```bash
-git clone https://github.com/yourusername/iLovePrivacyPDF.git
+git clone https://github.com/Rovart/iLovePrivacyPDF.git
 cd iLovePrivacyPDF
 
 chmod +x install.sh
@@ -452,19 +457,8 @@ For commercial licensing or to request an exception, please contact Roberto.
 
 ## 📧 Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/iLovePrivacyPDF/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/iLovePrivacyPDF/discussions)
-
-## 🗺️ Roadmap
-
-- [ ] Cloud storage integration (Google Drive, Dropbox)
-- [ ] Batch job queuing
-- [ ] Multi-language OCR support
-- [ ] Custom PDF styling templates
-- [ ] User accounts and history
-- [ ] Docker containerization
-- [ ] Mobile app (iOS/Android)
-- [ ] REST API with authentication
+- **Issues**: [GitHub Issues](https://github.com/Rovart/iLovePrivacyPDF/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Rovart/iLovePrivacyPDF/discussions)
 
 ---
 
