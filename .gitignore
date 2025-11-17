@@ -27,6 +27,14 @@ ocr-app/dist/
 ocr-app/.turbo/
 ocr-app/.swc/
 
+# Electron Build Files
+ocr-app/dist-electron/
+*.dmg
+*.exe
+*.deb
+*.AppImage
+*.snap
+
 # Node.js
 ocr-app/node_modules/
 npm-debug.log*

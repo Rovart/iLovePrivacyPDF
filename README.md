@@ -162,6 +162,41 @@ npm run dev
 
 Open: **http://localhost:3000**
 
+### Option 3: Desktop App (Electron)
+
+Run as a standalone desktop application:
+
+```bash
+# Quick start (development mode)
+./run-electron.sh
+
+# Or manually
+cd ocr-app
+npm run electron:dev
+```
+
+**Build standalone desktop app:**
+```bash
+# Interactive builder (choose platform)
+./build-electron.sh
+
+# Or build for specific platform
+cd ocr-app
+npm run electron:build:mac     # macOS (DMG + ZIP)
+npm run electron:build:win     # Windows (NSIS + Portable)
+npm run electron:build:linux   # Linux (AppImage + DEB)
+```
+
+**Packaged apps** will be in `ocr-app/dist/`
+
+**Electron Features:**
+- ✅ Standalone desktop application (no browser needed)
+- ✅ Auto-starts Next.js server internally
+- ✅ Includes Rust backend in package
+- ✅ Works offline (all processing is local)
+- ✅ Native menu bar and window controls
+- ✅ Cross-platform (macOS, Windows, Linux)
+
 ## 📖 Usage
 
 ### Web Interface
@@ -205,6 +240,7 @@ Open: **http://localhost:3000**
 |-----------|-----------|---------|
 | **Frontend** | Next.js + React | 16.0 / 19 |
 | **Backend** | Rust | 1.70+ |
+| **Desktop** | Electron | 39+ |
 | **OCR API 1** | NexaAI DeepSeek-OCR | GGUF:BF16 |
 | **OCR API 2** | Ollama (vision models) | Latest |
 | **Styling** | Tailwind CSS | 4.0 |
@@ -216,7 +252,9 @@ Open: **http://localhost:3000**
 
 ```
 iLovePrivacyPDF/
-├── run.sh                  # Quick start script
+├── run.sh                  # Quick start script (web)
+├── run-electron.sh         # Quick start script (desktop)
+├── build-electron.sh       # Build desktop app
 ├── stop.sh                 # Stop services
 ├── README.md               # This file
 ├── .gitignore              # Git ignore rules
@@ -227,6 +265,9 @@ iLovePrivacyPDF/
 │   └── target/release/     # Compiled binary
 │
 └── ocr-app/                # Next.js web app
+    ├── electron/           # Electron desktop app
+    │   ├── main.js         # Electron main process
+    │   └── preload.js      # Preload script
     ├── app/
     │   ├── api/            # API endpoints
     │   │   ├── process-stream/     # OCR streaming
@@ -241,6 +282,7 @@ iLovePrivacyPDF/
     ├── public/
     │   ├── uploads/        # Uploaded files (gitignored)
     │   └── outputs/        # Generated files & history (gitignored)
+    ├── dist/               # Electron builds (gitignored)
     ├── package.json
     └── tsconfig.json
 ```
