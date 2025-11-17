@@ -146,12 +146,15 @@ async function startNextServer() {
         
         const serverDir = path.dirname(serverPath);
         
-        nextServer = spawn('node', [serverPath], {
+        // Use process.execPath (Electron binary) which has Node.js built-in
+        // instead of 'node' which may not be in PATH in packaged app
+        nextServer = spawn(process.execPath, [serverPath], {
           cwd: serverDir,
           env: {
             ...process.env,
             PORT: PORT.toString(),
-            NODE_ENV: 'production'
+            NODE_ENV: 'production',
+            ELECTRON_RUN_AS_NODE: '1' // Run Electron as Node.js
           },
           stdio: ['ignore', 'pipe', 'pipe']
         });
