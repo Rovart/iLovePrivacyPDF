@@ -78,6 +78,48 @@ echo "╚═══════════════════════�
 echo ""
 echo "📦 Your packaged app is in: ocr-app/dist/"
 echo ""
+
+# Step 4: Clean up build artifacts
+echo "[4/4] Cleaning up build artifacts..."
+echo ""
+
+# Clean Next.js build artifacts
+echo "  • Removing .next/ directory..."
+rm -rf .next/
+
+# Clean icon generation artifacts
+echo "  • Removing iconset directory..."
+rm -rf public/icon.iconset/
+
+# Clean temporary files
+echo "  • Removing temporary files..."
+rm -f ../logo_processed.png
+
+# Clean node build artifacts
+echo "  • Removing node build cache..."
+rm -rf node_modules/.cache/
+
+# Go back to root
+cd ..
+
+# Clean Rust build artifacts (keep only the release binary)
+echo "  • Cleaning Rust build artifacts..."
+cd ocr-rust
+if [ -d "target/release" ]; then
+    # Keep only the binary, remove everything else
+    find target/release -mindepth 1 -maxdepth 1 ! -name "iloveprivacypdf" -exec rm -rf {} +
+fi
+# Remove debug builds entirely
+rm -rf target/debug/
+cd ..
+
+echo ""
+echo "✓ All build artifacts cleaned!"
+echo ""
+echo "Final output:"
+echo "  📦 Packaged app: ocr-app/dist/"
+echo "  🦀 Rust binary: ocr-rust/target/release/iloveprivacypdf"
+echo ""
 echo "To test the app before packaging, run:"
 echo "  npm run electron"
 echo ""
