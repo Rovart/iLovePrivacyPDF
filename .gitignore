@@ -68,6 +68,10 @@ ocr-app/public/output/*
 ocr-app/public/outputs/*
 ocr-app/public/temp_images/*
 
+# Icon generation artifacts
+ocr-app/public/icon.iconset/
+logo_processed.png
+
 # History file (contains user document metadata)
 ocr-app/public/outputs/.history.json
 
