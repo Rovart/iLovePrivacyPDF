@@ -54,8 +54,7 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
-        "dmg",
-        "zip"
+        "dir"
       ],
       "icon": "public/icon.icns",
       "extraResources": [
