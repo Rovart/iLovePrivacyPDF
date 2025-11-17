@@ -1,5 +1,5 @@
 const { app, BrowserWindow, dialog } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, fork } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -46,7 +46,7 @@ function checkRustBinary() {
   return true;
 }
 
-function waitForServer(port, maxAttempts = 30) {
+function waitForServer(port, maxAttempts = 60) {
   return new Promise((resolve, reject) => {
     let attempts = 0;
     
@@ -143,20 +143,22 @@ async function startNextServer() {
       
       if (serverPath) {
         console.log('Starting standalone Next.js server');
+        console.log('Server path:', serverPath);
         
         const serverDir = path.dirname(serverPath);
+        console.log('Working directory:', serverDir);
         
-        // Use process.execPath (Electron binary) which has Node.js built-in
-        // instead of 'node' which may not be in PATH in packaged app
-        nextServer = spawn(process.execPath, [serverPath], {
+        // Use fork to run Node.js script with Electron's built-in Node.js
+        nextServer = fork(serverPath, [], {
           cwd: serverDir,
           env: {
             ...process.env,
             PORT: PORT.toString(),
-            NODE_ENV: 'production',
-            ELECTRON_RUN_AS_NODE: '1' // Run Electron as Node.js
+            NODE_ENV: 'production'
           },
-          stdio: ['ignore', 'pipe', 'pipe']
+          stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+          execPath: process.execPath,
+          execArgv: ['--run-as-node'] // Run Electron as Node.js
         });
 
         nextServer.stdout.on('data', (data) => {
