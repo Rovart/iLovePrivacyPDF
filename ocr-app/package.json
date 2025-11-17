@@ -26,13 +26,11 @@
       "electron/**/*",
       ".next/**/*",
       "public/**/*",
-      "package.json"
+      "package.json",
+      "node_modules/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "../ocr-rust/target/release/iloveprivacypdf",
-        "to": "iloveprivacypdf"
-      }
+    "asarUnpack": [
+      "node_modules/**/*"
     ],
     "mac": {
       "category": "public.app-category.productivity",
@@ -40,14 +38,26 @@
         "dmg",
         "zip"
       ],
-      "icon": "public/icon.icns"
+      "icon": "public/icon.icns",
+      "extraResources": [
+        {
+          "from": "../ocr-rust/target/release/iloveprivacypdf",
+          "to": "iloveprivacypdf"
+        }
+      ]
     },
     "win": {
       "target": [
         "nsis",
         "portable"
       ],
-      "icon": "public/icon.ico"
+      "icon": "public/icon.ico",
+      "extraResources": [
+        {
+          "from": "../ocr-rust/target/release/iloveprivacypdf.exe",
+          "to": "iloveprivacypdf.exe"
+        }
+      ]
     },
     "linux": {
       "target": [
@@ -55,7 +65,13 @@
         "deb"
       ],
       "category": "Office",
-      "icon": "public/icon.png"
+      "icon": "public/icon.png",
+      "extraResources": [
+        {
+          "from": "../ocr-rust/target/release/iloveprivacypdf",
+          "to": "iloveprivacypdf"
+        }
+      ]
     }
   },
   "dependencies": {

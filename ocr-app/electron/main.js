@@ -8,8 +8,31 @@ let mainWindow;
 let nextServer;
 const PORT = 3000;
 
-// Path to Rust binary
-const rustBinaryPath = path.join(__dirname, '..', '..', 'ocr-rust', 'target', 'release', 'iloveprivacypdf');
+// Get path to Rust binary (handles both development and packaged app)
+function getRustBinaryPath() {
+  // Check if we're in a packaged app
+  if (app.isPackaged) {
+    const resourcesPath = process.resourcesPath;
+    
+    // Try different locations based on platform
+    const possiblePaths = [
+      path.join(resourcesPath, 'iloveprivacypdf'), // Linux/macOS
+      path.join(resourcesPath, 'iloveprivacypdf.exe'), // Windows
+      path.join(resourcesPath, '..', 'MacOS', 'iloveprivacypdf'), // macOS app bundle alternative
+    ];
+    
+    for (const binaryPath of possiblePaths) {
+      if (fs.existsSync(binaryPath)) {
+        return binaryPath;
+      }
+    }
+  }
+  
+  // Development mode
+  return path.join(__dirname, '..', '..', 'ocr-rust', 'target', 'release', 'iloveprivacypdf');
+}
+
+const rustBinaryPath = getRustBinaryPath();
 
 function checkRustBinary() {
   if (!fs.existsSync(rustBinaryPath)) {

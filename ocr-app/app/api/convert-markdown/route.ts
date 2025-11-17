@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getRustBinaryPath } from '@/lib/rust-binary';
 
 const execAsync = promisify(exec);
 
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     await writeFile(inputPath, buffer);
 
     // Get the Rust binary path
-    const rustBinaryPath = join(process.cwd(), '..', 'ocr-rust', 'target', 'release', 'iloveprivacypdf');
+    const rustBinaryPath = getRustBinaryPath();
     
     // Generate output filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
