@@ -7,10 +7,7 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true, // Disable image optimization for Electron
   },
-  // Exclude dist folder from being copied to standalone build
-  outputFileTracing: {
-    ignoreDirs: ['dist', 'node_modules/.cache'],
-  },
+  // Note: dist folder is cleaned before build via npm run clean script
 };
 
 export default nextConfig;
