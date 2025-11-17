@@ -116,16 +116,19 @@ async function startNextServer() {
     } else {
       console.log('Production mode: starting embedded Next.js server');
       
-      // In packaged app, extraFiles places content in app.getAppPath() or Contents/app
-      // extraResources places content in process.resourcesPath or Contents/Resources
-      const appPath = app.getAppPath();
-      const appContentsPath = path.dirname(appPath); // Get Contents directory
+      // In packaged app:
+      // - app.asar is in Contents/Resources/app.asar
+      // - extraFiles places content in Contents/app/ (not Resources!)
+      // - extraResources places content in Contents/Resources/
+      
+      // Get Contents directory by going up from Resources
+      const contentsPath = path.dirname(process.resourcesPath);
       
       // Try multiple possible locations for the Next.js server
       const possibleServerPaths = [
-        path.join(appContentsPath, 'app', '.next', 'standalone', 'server.js'), // Contents/app/...
+        path.join(contentsPath, 'app', '.next', 'standalone', 'server.js'), // Contents/app/... (extraFiles)
         path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js'), // Contents/Resources/app/...
-        path.join(appPath, '.next', 'standalone', 'server.js'), // app.asar/...
+        path.join(app.getAppPath(), '.next', 'standalone', 'server.js'), // app.asar/...
       ];
       
       let serverPath = null;
