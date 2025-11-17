@@ -30,6 +30,9 @@
       "public/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      ".next/standalone/node_modules/**/*"
+    ],
     "extraFiles": [
       {
         "from": ".next/standalone",
