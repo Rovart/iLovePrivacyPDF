@@ -116,21 +116,35 @@ async function startNextServer() {
     } else {
       console.log('Production mode: starting embedded Next.js server');
       
-      // In packaged app, start Next.js programmatically
-      const nextPath = path.join(process.resourcesPath, 'app', '.next');
-      const nextServerPath = path.join(process.resourcesPath, 'app', 'node_modules', 'next', 'dist', 'server', 'next-server.js');
+      // In packaged app, extraFiles places content in app.getAppPath() or Contents/app
+      // extraResources places content in process.resourcesPath or Contents/Resources
+      const appPath = app.getAppPath();
+      const appContentsPath = path.dirname(appPath); // Get Contents directory
       
-      console.log('Next.js build path:', nextPath);
-      console.log('Next.js server path:', nextServerPath);
+      // Try multiple possible locations for the Next.js server
+      const possibleServerPaths = [
+        path.join(appContentsPath, 'app', '.next', 'standalone', 'server.js'), // Contents/app/...
+        path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js'), // Contents/Resources/app/...
+        path.join(appPath, '.next', 'standalone', 'server.js'), // app.asar/...
+      ];
       
-      // Use node to run the Next.js standalone server
-      const serverPath = path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js');
+      let serverPath = null;
+      for (const possiblePath of possibleServerPaths) {
+        console.log('Checking server path:', possiblePath);
+        if (fs.existsSync(possiblePath)) {
+          serverPath = possiblePath;
+          console.log('✓ Found Next.js server at:', serverPath);
+          break;
+        }
+      }
       
-      if (fs.existsSync(serverPath)) {
+      if (serverPath) {
         console.log('Starting standalone Next.js server');
         
+        const serverDir = path.dirname(serverPath);
+        
         nextServer = spawn('node', [serverPath], {
-          cwd: path.join(process.resourcesPath, 'app', '.next', 'standalone'),
+          cwd: serverDir,
           env: {
             ...process.env,
             PORT: PORT.toString(),
@@ -157,7 +171,15 @@ async function startNextServer() {
           .then(resolve)
           .catch(reject);
       } else {
-        reject(new Error(`Next.js server not found at ${serverPath}`));
+        const errorMessage = `Next.js server not found at any of the expected locations:\n${possibleServerPaths.join('\n')}`;
+        console.error(errorMessage);
+        
+        dialog.showErrorBox(
+          'Failed to start the application',
+          `${errorMessage}\n\nPlease check that:\n1. Next.js is built (npm run build)\n2. Port ${PORT} is available`
+        );
+        
+        reject(new Error(errorMessage));
       }
     }
   });
