@@ -252,6 +252,15 @@ app.whenReady().then(async () => {
   console.log('╚════════════════════════════════════════╝');
   console.log('');
   
+  // Add bundled Poppler binaries to PATH for packaged app
+  if (app.isPackaged) {
+    const popplerPath = path.join(process.resourcesPath, 'poppler');
+    if (fs.existsSync(popplerPath)) {
+      process.env.PATH = `${popplerPath}${path.delimiter}${process.env.PATH}`;
+      console.log('✓ Added bundled Poppler to PATH:', popplerPath);
+    }
+  }
+  
   // Check Rust binary first
   if (!checkRustBinary()) {
     return;

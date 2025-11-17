@@ -54,13 +54,26 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
-        "dir"
+        "dir",
+        "dmg"
       ],
       "icon": "public/icon.icns",
       "extraResources": [
         {
           "from": "../ocr-rust/target/release/iloveprivacypdf",
           "to": "iloveprivacypdf"
+        },
+        {
+          "from": "/opt/homebrew/bin/pdftoppm",
+          "to": "poppler/pdftoppm"
+        },
+        {
+          "from": "/opt/homebrew/bin/pdfinfo",
+          "to": "poppler/pdfinfo"
+        },
+        {
+          "from": "/opt/homebrew/bin/pdfimages",
+          "to": "poppler/pdfimages"
         }
       ]
     },
