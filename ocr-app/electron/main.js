@@ -132,52 +132,51 @@ async function startNextServer() {
       ];
       
       let serverPath = null;
+      let serverDir = null;
       for (const possiblePath of possibleServerPaths) {
         console.log('Checking server path:', possiblePath);
         if (fs.existsSync(possiblePath)) {
           serverPath = possiblePath;
+          serverDir = path.dirname(possiblePath);
           console.log('✓ Found Next.js server at:', serverPath);
+          console.log('✓ Server directory:', serverDir);
           break;
         }
       }
       
-      if (serverPath) {
-        console.log('Starting standalone Next.js server');
-        console.log('Server path:', serverPath);
+      if (serverPath && serverDir) {
+        console.log('Starting Next.js server directly in Electron process...');
         
-        const serverDir = path.dirname(serverPath);
-        console.log('Working directory:', serverDir);
-        
-        // Use fork to run Node.js script with Electron's built-in Node.js
-        nextServer = fork(serverPath, [], {
-          cwd: serverDir,
-          env: {
-            ...process.env,
-            PORT: PORT.toString(),
-            NODE_ENV: 'production'
-          },
-          stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-          execPath: process.execPath,
-          execArgv: ['--run-as-node'] // Run Electron as Node.js
-        });
-
-        nextServer.stdout.on('data', (data) => {
-          console.log(`Next.js: ${data.toString().trim()}`);
-        });
-
-        nextServer.stderr.on('data', (data) => {
-          console.error(`Next.js error: ${data.toString().trim()}`);
-        });
-
-        nextServer.on('error', (error) => {
-          console.error('Failed to start Next.js:', error);
+        try {
+          // Set environment variables for Next.js
+          process.env.PORT = PORT.toString();
+          process.env.NODE_ENV = 'production';
+          process.env.HOSTNAME = 'localhost';
+          
+          // Change to server directory so Next.js can find its files
+          const originalCwd = process.cwd();
+          process.chdir(serverDir);
+          console.log('Changed working directory to:', process.cwd());
+          
+          // Require and start the Next.js server directly
+          console.log('Loading Next.js server module...');
+          require(serverPath);
+          console.log('Next.js server started!');
+          
+          // Wait for server to be ready
+          setTimeout(() => {
+            waitForServer(PORT)
+              .then(() => {
+                console.log('✓ Server verified and ready');
+                resolve();
+              })
+              .catch(reject);
+          }, 2000); // Give it 2 seconds to start listening
+          
+        } catch (error) {
+          console.error('Error starting Next.js server:', error);
           reject(error);
-        });
-
-        // Wait for server to be ready
-        waitForServer(PORT)
-          .then(resolve)
-          .catch(reject);
+        }
       } else {
         const errorMessage = `Next.js server not found at any of the expected locations:\n${possibleServerPaths.join('\n')}`;
         console.error(errorMessage);
@@ -284,10 +283,12 @@ app.on('activate', async () => {
 });
 
 app.on('before-quit', () => {
-  console.log('Shutting down Next.js server...');
+  console.log('Shutting down application...');
   
-  // Kill Next.js server
-  if (nextServer) {
+  // In production mode with direct require, Next.js runs in the same process
+  // and will shut down with the app. Only kill child process in dev mode.
+  if (nextServer && typeof nextServer.kill === 'function') {
+    console.log('Stopping Next.js server process...');
     nextServer.kill('SIGTERM');
     
     // Force kill after 5 seconds if not stopped
@@ -296,6 +297,8 @@ app.on('before-quit', () => {
         nextServer.kill('SIGKILL');
       }
     }, 5000);
+  } else {
+    console.log('Next.js server will shut down with main process');
   }
 });
 
