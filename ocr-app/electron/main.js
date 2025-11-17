@@ -265,10 +265,19 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('activate', () => {
+app.on('activate', async () => {
   // On macOS re-create window when dock icon is clicked
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    // Ensure app is ready before creating window
+    if (app.isReady()) {
+      // Make sure server is running
+      try {
+        await waitForServer(PORT);
+        createWindow();
+      } catch (error) {
+        console.error('Server not available on activate:', error);
+      }
+    }
   }
 });
 
