@@ -30,6 +30,12 @@ cd ..
 echo ""
 echo "[2/3] Building Next.js application..."
 cd ocr-app
+
+# Clean previous builds to prevent exponential growth
+echo "  → Cleaning previous builds..."
+rm -rf dist .next
+echo "  ✓ Cleaned dist and .next folders"
+
 if ! npm run build; then
     echo "❌ Failed to build Next.js app"
     exit 1
