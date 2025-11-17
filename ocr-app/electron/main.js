@@ -82,32 +82,84 @@ async function startNextServer() {
   return new Promise((resolve, reject) => {
     console.log('Starting Next.js server...');
     
-    const nextPath = path.join(__dirname, '..');
+    // In production/packaged app, use the built Next.js server
+    // In development, use npm run start
+    const isDev = !app.isPackaged;
     
-    // Start Next.js in production mode
-    nextServer = spawn('npm', ['run', 'start'], {
-      cwd: nextPath,
-      shell: true,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
+    if (isDev) {
+      console.log('Development mode: using npm start');
+      const nextPath = path.join(__dirname, '..');
+      
+      nextServer = spawn('npm', ['run', 'start'], {
+        cwd: nextPath,
+        shell: true,
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
 
-    nextServer.stdout.on('data', (data) => {
-      console.log(`Next.js: ${data.toString().trim()}`);
-    });
+      nextServer.stdout.on('data', (data) => {
+        console.log(`Next.js: ${data.toString().trim()}`);
+      });
 
-    nextServer.stderr.on('data', (data) => {
-      console.error(`Next.js error: ${data.toString().trim()}`);
-    });
+      nextServer.stderr.on('data', (data) => {
+        console.error(`Next.js error: ${data.toString().trim()}`);
+      });
 
-    nextServer.on('error', (error) => {
-      console.error('Failed to start Next.js:', error);
-      reject(error);
-    });
+      nextServer.on('error', (error) => {
+        console.error('Failed to start Next.js:', error);
+        reject(error);
+      });
 
-    // Wait for server to be ready
-    waitForServer(PORT)
-      .then(resolve)
-      .catch(reject);
+      // Wait for server to be ready
+      waitForServer(PORT)
+        .then(resolve)
+        .catch(reject);
+    } else {
+      console.log('Production mode: starting embedded Next.js server');
+      
+      // In packaged app, start Next.js programmatically
+      const nextPath = path.join(process.resourcesPath, 'app', '.next');
+      const nextServerPath = path.join(process.resourcesPath, 'app', 'node_modules', 'next', 'dist', 'server', 'next-server.js');
+      
+      console.log('Next.js build path:', nextPath);
+      console.log('Next.js server path:', nextServerPath);
+      
+      // Use node to run the Next.js standalone server
+      const serverPath = path.join(process.resourcesPath, 'app', '.next', 'standalone', 'server.js');
+      
+      if (fs.existsSync(serverPath)) {
+        console.log('Starting standalone Next.js server');
+        
+        nextServer = spawn('node', [serverPath], {
+          cwd: path.join(process.resourcesPath, 'app', '.next', 'standalone'),
+          env: {
+            ...process.env,
+            PORT: PORT.toString(),
+            NODE_ENV: 'production'
+          },
+          stdio: ['ignore', 'pipe', 'pipe']
+        });
+
+        nextServer.stdout.on('data', (data) => {
+          console.log(`Next.js: ${data.toString().trim()}`);
+        });
+
+        nextServer.stderr.on('data', (data) => {
+          console.error(`Next.js error: ${data.toString().trim()}`);
+        });
+
+        nextServer.on('error', (error) => {
+          console.error('Failed to start Next.js:', error);
+          reject(error);
+        });
+
+        // Wait for server to be ready
+        waitForServer(PORT)
+          .then(resolve)
+          .catch(reject);
+      } else {
+        reject(new Error(`Next.js server not found at ${serverPath}`));
+      }
+    }
   });
 }
 

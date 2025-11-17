@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node post-build.js",
     "start": "next start",
     "lint": "eslint",
     "electron": "electron .",
@@ -24,13 +24,27 @@
     },
     "files": [
       "electron/**/*",
-      ".next/**/*",
+      ".next/standalone/**/*",
+      ".next/static/**/*",
       "public/**/*",
-      "package.json",
-      "node_modules/**/*"
+      "package.json"
     ],
-    "asarUnpack": [
-      "node_modules/**/*"
+    "extraFiles": [
+      {
+        "from": ".next/standalone",
+        "to": "app/.next/standalone",
+        "filter": ["**/*"]
+      },
+      {
+        "from": ".next/static",
+        "to": "app/.next/static",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "public",
+        "to": "app/public",
+        "filter": ["**/*"]
+      }
     ],
     "mac": {
       "category": "public.app-category.productivity",
