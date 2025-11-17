@@ -227,8 +227,10 @@ async function downloadAllImages(images: string[], timestamp?: string) {
 
 export default function Home() {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
-  const [mode, setMode] = useState<'ocr' | 'markdown' | 'merge' | 'images-to-pdf' | 'history'>('ocr');
+  const [mode, setMode] = useState<'ocr' | 'markdown' | 'merge' | 'images-to-pdf' | 'image-convert' | 'history'>('ocr');
   const [imagePdfMode, setImagePdfMode] = useState<'images-to-pdf' | 'pdf-to-images'>('images-to-pdf');
+  const [convertFormat, setConvertFormat] = useState<'jpeg' | 'png' | 'webp' | 'avif' | 'tiff'>('png');
+  const [convertQuality, setConvertQuality] = useState(90);
   const [useCoordinates, setUseCoordinates] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [status, setStatus] = useState<string>('');
@@ -243,6 +245,7 @@ export default function Home() {
   const [ocrModel, setOcrModel] = useState<string>('NexaAI/DeepSeek-OCR-GGUF:BF16');
   const [joinImages, setJoinImages] = useState(false);
   const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [useGroundingMode, setUseGroundingMode] = useState(true);
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string>('');
@@ -469,6 +472,8 @@ export default function Home() {
           // pdf-to-images mode
           return file.type === 'application/pdf';
         }
+      } else if (mode === 'image-convert') {
+        return file.type.startsWith('image/');
       }
       return false;
     });
@@ -504,10 +509,13 @@ export default function Home() {
     formData.append('ocrModel', ocrModel);
     formData.append('joinImages', joinImages.toString());
     
-    // Add custom prompt for Ollama models
+    // Add custom prompt and grounding mode for OCR models
     const selectedModel = availableModels.find(m => m.id === ocrModel);
-    if (selectedModel?.provider === 'ollama' && customPrompt.trim()) {
+    if ((selectedModel?.provider === 'ollama' || selectedModel?.provider === 'nexa') && customPrompt.trim()) {
       formData.append('customPrompt', customPrompt.trim());
+    }
+    if (selectedModel?.provider === 'nexa') {
+      formData.append('useGroundingMode', useGroundingMode.toString());
     }
 
     try {
@@ -615,7 +623,7 @@ export default function Home() {
         } else {
           setStatus(`Error: ${data.error}`);
         }
-      } else {
+      } else if (mode === 'images-to-pdf') {
         // Images/PDF mode with sub-modes
         if (imagePdfMode === 'pdf-to-images') {
           // PDF to Images mode
@@ -675,6 +683,45 @@ export default function Home() {
           } else {
             setStatus(`Error: ${data.error}`);
           }
+        }
+      } else if (mode === 'image-convert') {
+        // Image format conversion mode
+        if (files.length === 0) {
+          setStatus('Please upload an image first');
+          setProcessing(false);
+          return;
+        }
+
+        setStatus('Converting image format...');
+        
+        const convertFormData = new FormData();
+        convertFormData.append('file', files[0].file);
+        convertFormData.append('format', convertFormat);
+        convertFormData.append('quality', convertQuality.toString());
+
+        const response = await fetch('/api/convert-image', {
+          method: 'POST',
+          body: convertFormData,
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setStatus(`✓ Image converted to ${convertFormat.toUpperCase()} successfully!`);
+          setProgress(100);
+          setDownloadLinks({
+            images: [data.imageUrl],
+            count: 1
+          });
+          
+          // Save to history
+          saveToHistory({
+            mode: `convert-to-${convertFormat}`,
+            images: [data.imageUrl],
+            imageCount: 1,
+          });
+        } else {
+          setStatus(`Error: ${data.error}`);
         }
       }
     } catch (error: any) {
@@ -815,6 +862,19 @@ export default function Home() {
                     : 'bg-[#f4f1e8] text-[#1a1a1a] border-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f4f1e8]'
               }`}>
               <span className="relative z-10">Images ↔ PDF</span>
+            </button>
+            <button
+              onClick={() => setMode('image-convert')}
+              className={`px-6 py-3 border-2 font-mono uppercase tracking-wider text-sm transition-all ${
+                mode === 'image-convert'
+                  ? darkMode 
+                    ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]' 
+                    : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
+                  : darkMode
+                    ? 'bg-[#2a2a2a] text-[#ccc] border-[#444] hover:bg-[#3a3a3a] hover:text-[#ffd700]'
+                    : 'bg-[#f4f1e8] text-[#1a1a1a] border-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#f4f1e8]'
+              }`}>
+              <span className="relative z-10">🔄 Convert Format</span>
             </button>
             <button
               onClick={() => setMode('history')}
@@ -1048,6 +1108,63 @@ export default function Home() {
                 }`}>
                 📄 PDF → Images
               </button>
+            </div>
+          )}
+
+          {/* Image Format Conversion Options */}
+          {mode === 'image-convert' && (
+            <div className={`mb-6 p-4 border-2 max-w-2xl mx-auto transition-colors ${
+              darkMode
+                ? 'bg-[#2a2a2a] border-[#444]'
+                : 'bg-[#f4f1e8] border-[#d4d0c5]'
+            }`}>
+              <div className="mb-4">
+                <label className={`block font-mono uppercase text-xs tracking-wider mb-2 ${
+                  darkMode ? 'text-[#ffd700]' : 'text-[#2d4f7c]'
+                }`}>
+                  Target Format
+                </label>
+                <div className="flex gap-2 flex-wrap">
+                  {(['jpeg', 'png', 'webp', 'avif', 'tiff'] as const).map((format) => (
+                    <button
+                      key={format}
+                      onClick={() => setConvertFormat(format)}
+                      className={`px-4 py-2 border font-mono uppercase text-xs tracking-wider transition-all ${
+                        convertFormat === format
+                          ? darkMode
+                            ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]'
+                            : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
+                          : darkMode
+                            ? 'bg-[#3a3a3a] text-[#ccc] border-[#555] hover:bg-[#444]'
+                            : 'bg-white text-[#666] border-[#ccc] hover:bg-[#f0f0f0]'
+                      }`}>
+                      {format.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              {(convertFormat === 'jpeg' || convertFormat === 'webp' || convertFormat === 'avif') && (
+                <div className="mb-4">
+                  <label className={`block font-mono uppercase text-xs tracking-wider mb-2 ${
+                    darkMode ? 'text-[#ffd700]' : 'text-[#2d4f7c]'
+                  }`}>
+                    Quality: {convertQuality}%
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="100"
+                    value={convertQuality}
+                    onChange={(e) => setConvertQuality(parseInt(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              )}
+              
+              <p className={`text-xs font-mono ${darkMode ? 'text-[#aaa]' : 'text-[#666]'}`}>
+                Convert your image to a different format. JPEG/WebP/AVIF support quality adjustment.
+              </p>
             </div>
           )}
 
@@ -1307,10 +1424,10 @@ export default function Home() {
               </div>
             )}
 
-            {/* Custom Prompt for Ollama models */}
+            {/* Custom Prompt for OCR models */}
             {mode === 'ocr' && (() => {
               const selectedModel = availableModels.find(m => m.id === ocrModel);
-              return selectedModel?.provider === 'ollama';
+              return selectedModel?.provider === 'ollama' || selectedModel?.provider === 'nexa';
             })() && (
               <div className={`mt-6 p-4 border-2 transition-colors ${
                 darkMode
@@ -1325,8 +1442,8 @@ export default function Home() {
                 <textarea
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
-                  placeholder="Add custom instructions for the Ollama model (e.g., 'Extract text and preserve formatting', 'Focus on tables and numbers', etc.)"
-                  rows={3}
+                  placeholder="Specify what fields to extract and how to structure the output (e.g., 'Extract: Name, Date, Amount. Format as markdown table', 'Extract invoice details: vendor, date, total, items with descriptions')"
+                  rows={4}
                   className={`w-full px-3 py-2 border-2 font-mono text-sm transition-all resize-none ${
                     darkMode
                       ? 'bg-[#1a1a1a] text-[#ccc] border-[#444] focus:border-[#ffd700] placeholder-[#666]'
@@ -1336,8 +1453,59 @@ export default function Home() {
                 <div className={`text-xs mt-1 font-mono ${
                   darkMode ? 'text-[#999]' : 'text-[#666]'
                 }`}>
-                  💡 This prompt will be sent to the Ollama model along with the image
+                  💡 Specify what information to extract and how to structure the markdown output
                 </div>
+                
+                {/* NexaAI Mode Toggle - only show for NexaAI models */}
+                {(() => {
+                  const selectedModel = availableModels.find(m => m.id === ocrModel);
+                  return selectedModel?.provider === 'nexa';
+                })() && (
+                  <div className="mt-4 pt-4 border-t ${
+                    darkMode ? 'border-[#444]' : 'border-[#d4d0c5]'
+                  }">
+                    <label className={`font-mono text-sm font-bold uppercase tracking-wider block mb-3 ${
+                      darkMode ? 'text-[#ccc]' : 'text-[#1a1a1a]'
+                    }`}>
+                      OCR Mode
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setUseGroundingMode(true)}
+                        className={`flex-1 px-4 py-3 border-2 font-mono text-xs uppercase tracking-wider transition-all ${
+                          useGroundingMode
+                            ? darkMode
+                              ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]'
+                              : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
+                            : darkMode
+                              ? 'bg-[#3a3a3a] text-[#ccc] border-[#555] hover:bg-[#444]'
+                              : 'bg-white text-[#666] border-[#ccc] hover:bg-[#f0f0f0]'
+                        }`}>
+                        📄 Document Mode
+                      </button>
+                      <button
+                        onClick={() => setUseGroundingMode(false)}
+                        className={`flex-1 px-4 py-3 border-2 font-mono text-xs uppercase tracking-wider transition-all ${
+                          !useGroundingMode
+                            ? darkMode
+                              ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]'
+                              : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
+                            : darkMode
+                              ? 'bg-[#3a3a3a] text-[#ccc] border-[#555] hover:bg-[#444]'
+                              : 'bg-white text-[#666] border-[#ccc] hover:bg-[#f0f0f0]'
+                        }`}>
+                        📷 Photo Mode
+                      </button>
+                    </div>
+                    <div className={`text-xs mt-2 font-mono ${
+                      darkMode ? 'text-[#999]' : 'text-[#666]'
+                    }`}>
+                      {useGroundingMode 
+                        ? '📄 Uses grounding tags for structured document OCR (default)' 
+                        : '📷 Free OCR for photos with text (no grounding tags)'}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

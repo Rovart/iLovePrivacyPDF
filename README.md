@@ -18,8 +18,8 @@ A **privacy-first**, high-performance document processing application built with
 | **OCR** | Images, PDFs | Markdown + PDF | Extract text from scanned documents (locally) |
 | **Markdown → PDF** | .md files | PDF | Convert markdown to formatted PDF (offline) |
 | **Merge PDFs** | Multiple PDFs | Single PDF | Combine PDF documents (no upload required) |
-| **Images → PDF** | Multiple images | Single PDF | Create PDF from image sequence (private) |
-| **PDF → Images** | PDF | Images | Export each page of a PDF as images (private) |
+| **Images ↔ PDF** | Images or PDF | PDF or Images | Convert between images and PDF (bidirectional) |
+| **🔄 Convert Format** | Images | Images | Convert image formats (JPEG, PNG, WebP, AVIF, TIFF) |
 | **📜 History** | - | Previous outputs | Download any previously processed documents |
 
 ### 🎨 User Interface
@@ -176,8 +176,10 @@ Open: **http://localhost:3000**
 
 - **Coordinates Mode**: Preserves document structure and text positioning
 - **Plain Text Mode**: Simple top-to-bottom text extraction
-- **Custom Prompts** (Ollama only): Add instructions to improve OCR quality
+- **Custom Prompts**: Add instructions for both NexaAI and Ollama models to improve OCR quality
+- **Document/Photo Mode Toggle** (NexaAI): Switch between structured document OCR (with grounding tags) and free OCR for photos
 - **Batch Processing**: Process multiple images/PDFs at once
+- **Join Images** (Experimental): Combine multiple images into one before OCR
 
 ### History Mode Features
 
@@ -186,6 +188,14 @@ Open: **http://localhost:3000**
 - **Quick Download**: Re-download any previously processed document
 - **Delete Individual Items**: Remove unwanted entries from history
 - **Clear All**: Bulk delete all history at once
+
+### Image Conversion Features
+
+- **Format Support**: Convert between JPEG, PNG, WebP, AVIF, and TIFF
+- **Quality Control**: Adjustable quality slider (1-100%) for JPEG, WebP, and AVIF
+- **Smart Compression**: PNG uses maximum compression, TIFF uses LZW compression
+- **HEIC Input**: Supports HEIC/HEIF images as input (converts to other formats)
+- **Batch Ready**: Convert one image at a time with instant processing
 
 ## 🏗️ Architecture
 
@@ -198,7 +208,8 @@ Open: **http://localhost:3000**
 | **OCR API 1** | NexaAI DeepSeek-OCR | GGUF:BF16 |
 | **OCR API 2** | Ollama (vision models) | Latest |
 | **Styling** | Tailwind CSS | 4.0 |
-| **PDF Gen** | printpdf + Sharp | 0.7 / 0.34 |
+| **PDF Gen** | printpdf | 0.7 |
+| **Image Processing** | Sharp | 0.34 |
 | **Type Safety** | TypeScript | 5.0 |
 
 ### Project Structure
@@ -223,6 +234,7 @@ iLovePrivacyPDF/
     │   │   ├── merge-pdfs/         # PDF merge
     │   │   ├── images-to-pdf/      # Images → PDF
     │   │   ├── pdf-to-images/      # PDF → Images
+    │   │   ├── convert-image/      # Image format conversion
     │   │   └── history/            # Document history API
     │   ├── page.tsx        # Main UI
     │   └── layout.tsx      # Layout
@@ -279,7 +291,8 @@ Process images/PDFs with streaming progress.
 - `files`: Image or PDF files
 - `ocrModel`: Model ID (e.g., "NexaAI/DeepSeek-OCR-GGUF:BF16")
 - `useCoordinates`: "true" or "false"
-- `customPrompt`: Optional custom instructions (Ollama only)
+- `customPrompt`: Optional custom instructions (works for both NexaAI and Ollama)
+- `useGroundingMode`: "true" or "false" (NexaAI only, default: true)
 - `joinImages`: "true" or "false" (experimental)
 
 **Response**: Server-Sent Events (SSE)
@@ -298,7 +311,7 @@ Merge multiple PDFs.
 **Request**: `multipart/form-data`
 - `files`: PDF files (order matters)
 
-**Response**: JSON with merged PDF URL
+**Response**: JSON with PDF URL
 
 ### POST `/api/images-to-pdf`
 Create PDF from images.
@@ -307,6 +320,24 @@ Create PDF from images.
 - `files`: Image files (order matters)
 
 **Response**: JSON with PDF URL
+
+### POST `/api/pdf-to-images`
+Extract images from PDF.
+
+**Request**: `multipart/form-data`
+- `files`: PDF file
+
+**Response**: JSON with array of image URLs
+
+### POST `/api/convert-image`
+Convert image format.
+
+**Request**: `multipart/form-data`
+- `file`: Image file (supports HEIC/HEIF input)
+- `format`: Target format (jpeg, png, webp, avif, tiff)
+- `quality`: Quality percentage (1-100, for lossy formats)
+
+**Response**: JSON with converted image URL
 
 ### GET/POST/DELETE/PUT `/api/history`
 Manage document processing history.

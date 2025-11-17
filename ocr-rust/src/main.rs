@@ -64,6 +64,10 @@ enum Commands {
         #[arg(long)]
         custom_prompt: Option<String>,
 
+        /// Disable grounding mode for NexaAI models (use free OCR instead of structured document OCR)
+        #[arg(long)]
+        disable_grounding_mode: bool,
+
         /// Use coordinates in OCR output
         #[arg(long)]
         use_coordinates: bool,
@@ -186,11 +190,12 @@ async fn main() -> Result<()> {
                 println!("{}", markdown);
             }
         }
-        Commands::ProcessDir { input, output, model, join_images, custom_prompt, use_coordinates } => {
+        Commands::ProcessDir { input, output, model, join_images, custom_prompt, disable_grounding_mode, use_coordinates } => {
+            let use_grounding_mode = !disable_grounding_mode;
             let markdown = if *join_images {
-                process_directory_joined(input, model, custom_prompt.as_deref(), *use_coordinates).await?
+                process_directory_joined(input, model, custom_prompt.as_deref(), use_grounding_mode, *use_coordinates).await?
             } else {
-                process_directory(input, model, custom_prompt.as_deref(), *use_coordinates).await?
+                process_directory(input, model, custom_prompt.as_deref(), use_grounding_mode, *use_coordinates).await?
             };
             fs::write(output, &markdown)?;
             println!("✓ Markdown saved to: {}", output.display());
@@ -241,6 +246,11 @@ async fn main() -> Result<()> {
 }
 
 async fn process_image(image_path: &Path, model: &str, custom_prompt: Option<&str>, use_coordinates: bool) -> Result<String> {
+    // Default to grounding mode enabled for backward compatibility
+    process_image_with_mode(image_path, model, custom_prompt, true, use_coordinates).await
+}
+
+async fn process_image_with_mode(image_path: &Path, model: &str, custom_prompt: Option<&str>, use_grounding_mode: bool, use_coordinates: bool) -> Result<String> {
     let filename = image_path
         .file_name()
         .and_then(|n| n.to_str())
@@ -256,11 +266,25 @@ async fn process_image(image_path: &Path, model: &str, custom_prompt: Option<&st
     // Detect if this is an Ollama model (doesn't contain "NexaAI" or "GGUF")
     let is_ollama = !model.contains("NexaAI") && !model.contains("GGUF");
 
-    // Build the base prompt text
+    // Build the base prompt text based on model type and grounding mode
     let base_prompt = if let Some(custom) = custom_prompt {
-        format!("{} <|grounding|>{}", filename, custom)
+        // For custom prompts, include grounding tag only for NexaAI with grounding mode enabled
+        if is_ollama {
+            format!("{} {}", filename, custom)
+        } else if use_grounding_mode {
+            format!("{} <|grounding|>{}", filename, custom)
+        } else {
+            format!("{} {}", filename, custom)
+        }
     } else {
-        format!("{} <|grounding|>Convert the document to markdown.", filename)
+        // Default prompts based on model type and grounding mode
+        if is_ollama {
+            format!("{} Convert the document to markdown.", filename)
+        } else if use_grounding_mode {
+            format!("{} <|grounding|>Convert the document to markdown.", filename)
+        } else {
+            format!("{} Free OCR.", filename)
+        }
     };
 
     // Add automatic instructions for Ollama models
@@ -327,7 +351,7 @@ async fn process_image(image_path: &Path, model: &str, custom_prompt: Option<&st
     Ok(clean_markdown(&markdown))
 }
 
-async fn process_directory(dir_path: &Path, model: &str, custom_prompt: Option<&str>, use_coordinates: bool) -> Result<String> {
+async fn process_directory(dir_path: &Path, model: &str, custom_prompt: Option<&str>, use_grounding_mode: bool, use_coordinates: bool) -> Result<String> {
     let mut image_files: Vec<PathBuf> = WalkDir::new(dir_path)
         .max_depth(1)
         .into_iter()
@@ -358,7 +382,7 @@ async fn process_directory(dir_path: &Path, model: &str, custom_prompt: Option<&
         // Simple per-image progress log (no animation)
         println!("[{}/{}] {}% | Processing: {}", current, total, percentage, image_path.display());
 
-        let markdown = process_image(image_path, model, custom_prompt, use_coordinates).await?;
+        let markdown = process_image_with_mode(image_path, model, custom_prompt, use_grounding_mode, use_coordinates).await?;
         
         // Add image index marker before the content
         combined_markdown.push_str(&format!("---IMAGE_INDEX:{}---\n", i));
@@ -376,7 +400,7 @@ async fn process_directory(dir_path: &Path, model: &str, custom_prompt: Option<&
     Ok(combined_markdown)
 }
 
-async fn process_directory_joined(dir_path: &Path, model: &str, custom_prompt: Option<&str>, use_coordinates: bool) -> Result<String> {
+async fn process_directory_joined(dir_path: &Path, model: &str, custom_prompt: Option<&str>, use_grounding_mode: bool, use_coordinates: bool) -> Result<String> {
     use image::{DynamicImage, ImageBuffer, Rgba};
     
     let mut image_files: Vec<PathBuf> = WalkDir::new(dir_path)
@@ -510,9 +534,23 @@ async fn process_directory_joined(dir_path: &Path, model: &str, custom_prompt: O
 
     // Build the base prompt text with custom prompt if provided
     let base_prompt = if let Some(custom) = custom_prompt {
-        format!("Combined document with multiple pages. <|grounding|>{}", custom)
+        // For NexaAI with custom prompt, include grounding tag only if use_grounding_mode is true
+        if is_ollama {
+            format!("Combined document with multiple pages. {}", custom)
+        } else if use_grounding_mode {
+            format!("Combined document with multiple pages. <|grounding|>{}", custom)
+        } else {
+            format!("Combined document with multiple pages. {}", custom)
+        }
     } else {
-        "Combined document with multiple pages. <|grounding|>Convert the entire document to markdown, preserving the structure and content from all pages.".to_string()
+        // Default prompts based on model and grounding mode
+        if is_ollama {
+            "Combined document with multiple pages. Convert the entire document to markdown, preserving the structure and content from all pages.".to_string()
+        } else if use_grounding_mode {
+            "Combined document with multiple pages. <|grounding|>Convert the entire document to markdown, preserving the structure and content from all pages.".to_string()
+        } else {
+            "Combined document with multiple pages. Free OCR.".to_string()
+        }
     };
 
     // Add automatic instructions for Ollama models
@@ -630,8 +668,8 @@ async fn process_pdf(pdf_path: &Path, temp_dir: &Path, use_native: bool) -> Resu
         }
     }
 
-    // Process extracted images
-    process_directory(temp_dir, DEFAULT_MODEL, None, false).await
+    // Process extracted images with default grounding mode enabled and coordinates disabled
+    process_directory(temp_dir, DEFAULT_MODEL, None, true, false).await
 }
 
 async fn process_pdf_native(pdf_path: &Path) -> Result<String> {

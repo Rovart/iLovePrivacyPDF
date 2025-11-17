@@ -103,6 +103,7 @@ export async function POST(request: NextRequest) {
         ocrModel = formData.get('ocrModel') as string || 'NexaAI/DeepSeek-OCR-GGUF:BF16';
         const joinImages = formData.get('joinImages') === 'true';
         const customPrompt = formData.get('customPrompt') as string | null;
+        const useGroundingMode = formData.get('useGroundingMode') !== 'false'; // Default to true
 
         if (files.length === 0) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'No files provided' })}\n\n`));
@@ -253,9 +254,14 @@ export async function POST(request: NextRequest) {
             args.push('--model', ocrModel);
           }
           
-          // Add custom prompt parameter for Ollama models
+          // Add custom prompt parameter (works for both NexaAI and Ollama models)
           if (customPrompt && customPrompt.trim()) {
             args.push('--custom-prompt', customPrompt.trim());
+          }
+          
+          // Add disable-grounding-mode flag for NexaAI models when Photo mode is selected
+          if ((ocrModel.includes('NexaAI') || ocrModel.includes('GGUF')) && !useGroundingMode) {
+            args.push('--disable-grounding-mode');
           }
           
           // Add use-coordinates flag if enabled
