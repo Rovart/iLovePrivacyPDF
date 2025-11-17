@@ -153,6 +153,24 @@ async function startNextServer() {
           process.env.NODE_ENV = 'production';
           process.env.HOSTNAME = 'localhost';
           
+          // Add module search paths for node_modules
+          // Check both the standalone location and app.asar.unpacked
+          const modulePaths = [
+            path.join(serverDir, 'node_modules'),
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules'),
+            path.join(app.getAppPath(), 'node_modules')
+          ];
+          
+          // Add all possible module paths to NODE_PATH
+          modulePaths.forEach(modPath => {
+            if (fs.existsSync(modPath)) {
+              console.log('Adding module path:', modPath);
+              if (!module.paths.includes(modPath)) {
+                module.paths.unshift(modPath);
+              }
+            }
+          });
+          
           // Change to server directory so Next.js can find its files
           const originalCwd = process.cwd();
           process.chdir(serverDir);
