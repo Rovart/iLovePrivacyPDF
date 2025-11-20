@@ -11,25 +11,28 @@ A **privacy-first**, high-performance document processing application built with
 
 ## ✨ Features
 
-### 🎯 Four Processing Modes
+### 🎯 Document Processing Modes
 
 | Mode | Input | Output | Use Case |
 |------|-------|--------|----------|
-| **OCR** | Images, PDFs | Markdown + PDF | Extract text from scanned documents (locally) |
-| **Markdown → PDF** | .md files | PDF | Convert markdown to formatted PDF (offline) |
-| **Merge PDFs** | Multiple PDFs | Single PDF | Combine PDF documents (no upload required) |
-| **Images ↔ PDF** | Images or PDF | PDF or Images | Convert between images and PDF (bidirectional) |
-| **🔄 Convert Format** | Images | Images | Convert image formats (JPEG, PNG, WebP, AVIF, TIFF) |
-| **📜 History** | - | Previous outputs | Download any previously processed documents |
+| **OCR** | Images, PDFs | Markdown + PDF | Extract text from scanned documents with AI-powered OCR |
+| **Markdown → PDF** | .md files | PDF | Convert markdown to beautifully formatted PDF |
+| **Merge PDFs** | Multiple PDFs | Single PDF | Combine multiple PDF documents into one |
+| **Split & Reorder PDF** | PDF | PDF | Select, reorder, and extract specific pages from PDFs |
+| **Images ↔ PDF** | Images or PDF | PDF or Images | Convert images to PDF or extract images from PDF |
+| **🔄 Convert Format** | Images | Images | Convert between image formats (JPEG, PNG, WebP, AVIF, TIFF) |
+| **📜 History** | - | Previous outputs | Access and download all previously processed documents |
 
 ### 🎨 User Interface
 - **Dark/Light Mode**: Full theme support with vintage aesthetic
-- **Drag & Drop**: Intuitive file uploads with reordering
+- **Drag & Drop**: Intuitive file uploads with reordering support
+- **Page Thumbnails**: Lazy-loaded PDF page previews with loading animations
 - **Real-time Progress**: Live status updates during processing
-- **Responsive Design**: Works on desktop, tablet, and mobile
+- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
 - **Paper & Ink Theme**: Distinctive vintage aesthetic avoiding generic templates
+- **Organized Menu**: Features grouped into logical categories (OCR & Text, PDF Tools, Image Tools)
 - **Privacy-Focused**: No external connections, all processing is local
-- **📜 Document History**: Server-side history with automatic file verification (persistent across app restarts)
+- **📜 Document History**: Persistent history with quick access button
 
 ### � Privacy & Security
 - **100% Local Processing**: All OCR and document processing happens on your machine
@@ -201,11 +204,14 @@ npm run electron:build:linux   # Linux (AppImage + DEB)
 
 ### Web Interface
 
-1. **Select Processing Mode** from the menu
+1. **Select Processing Mode** from the categorized menu:
+   - **📝 OCR & Text**: Extract Text (OCR), Markdown → PDF
+   - **📄 PDF Tools**: Merge PDFs, Split & Reorder, Images ↔ PDF
+   - **🖼️ Image Tools**: Convert Format
 2. **Upload Files** via drag-and-drop or file picker
-3. **Configure Options** (coordinates, prompts, etc.)
-4. **Click Process** and monitor progress
-5. **Download Results** when complete
+3. **Configure Options** (coordinates, prompts, quality, etc.)
+4. **Click Process** and monitor real-time progress
+5. **Download Results** when complete or access via History
 
 ### OCR Mode Features
 
@@ -216,9 +222,19 @@ npm run electron:build:linux   # Linux (AppImage + DEB)
 - **Batch Processing**: Process multiple images/PDFs at once
 - **Join Images** (Experimental): Combine multiple images into one before OCR
 
+### Split & Reorder PDF Features
+
+- **Visual Page Selection**: View PDF page thumbnails with lazy loading
+- **Drag & Drop Reordering**: Rearrange pages in any order
+- **Page Selection**: Click to select/deselect specific pages
+- **Batch Operations**: Select All or Deselect All buttons
+- **Live Preview**: See page thumbnails while making selections
+- **Fast Thumbnails**: Optimized 50 DPI previews with loading animations
+
 ### History Mode Features
 
 - **Server-Side Persistence**: History stored on server (survives app restarts)
+- **Quick Access**: History button in top-right corner
 - **Automatic Cleanup**: Removes history entries for deleted files
 - **Quick Download**: Re-download any previously processed document
 - **Delete Individual Items**: Remove unwanted entries from history
@@ -231,6 +247,15 @@ npm run electron:build:linux   # Linux (AppImage + DEB)
 - **Smart Compression**: PNG uses maximum compression, TIFF uses LZW compression
 - **HEIC Input**: Supports HEIC/HEIF images as input (converts to other formats)
 - **Batch Ready**: Convert one image at a time with instant processing
+
+### Images ↔ PDF Features
+
+- **Bidirectional Conversion**: 
+  - Images → PDF: Combine multiple images into a single PDF
+  - PDF → Images: Extract all pages as individual image files
+- **Drag & Drop Reordering**: Arrange images in desired order before conversion
+- **Format Options**: Choose output format for PDF → Images (JPEG, PNG, WebP, etc.)
+- **Quality/DPI Control**: Adjustable settings for output quality
 
 ## 🏗️ Architecture
 
@@ -273,15 +298,22 @@ iLovePrivacyPDF/
     │   │   ├── process-stream/     # OCR streaming
     │   │   ├── convert-markdown/   # MD → PDF
     │   │   ├── merge-pdfs/         # PDF merge
+    │   │   ├── split-pdf/          # PDF split & reorder
     │   │   ├── images-to-pdf/      # Images → PDF
     │   │   ├── pdf-to-images/      # PDF → Images
+    │   │   ├── pdf-info/           # PDF page count
     │   │   ├── convert-image/      # Image format conversion
     │   │   └── history/            # Document history API
     │   ├── page.tsx        # Main UI
     │   └── layout.tsx      # Layout
+    ├── lib/
+    │   ├── paths.ts        # Path management utilities
+    │   ├── rust-binary.ts  # Rust binary path resolution
+    │   └── dependencies.ts # Dependency checking
     ├── public/
     │   ├── uploads/        # Uploaded files (gitignored)
-    │   └── outputs/        # Generated files & history (gitignored)
+    │   ├── outputs/        # Generated files & history (gitignored)
+    │   └── temp_images/    # Temporary images (gitignored)
     ├── dist/               # Electron builds (gitignored)
     ├── package.json
     └── tsconfig.json
