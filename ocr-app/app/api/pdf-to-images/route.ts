@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { checkPoppler, getPopplerInstallCommand } from '@/lib/dependencies';
+import { getTempImagesDir, getOutputsDir } from '@/lib/paths';
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,8 +43,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Create necessary directories
-    const tempDir = path.join(process.cwd(), 'public', 'temp_images');
-    const outputDir = path.join(process.cwd(), 'public', 'outputs');
+    const tempDir = getTempImagesDir();
+    const outputDir = getOutputsDir();
     
     // Clean temp directory
     if (existsSync(tempDir)) {

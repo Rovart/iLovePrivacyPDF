@@ -255,12 +255,40 @@ app.whenReady().then(async () => {
   // Add common binary paths to PATH for packaged app
   // This ensures Nexa, Ollama, and other CLI tools are found
   if (app.isPackaged) {
-    const commonPaths = [
-      '/usr/local/bin',           // Common for Homebrew on Intel Macs, Nexa, Ollama
-      '/opt/homebrew/bin',        // Homebrew on Apple Silicon Macs
-      '/usr/bin',                 // System binaries
-      path.join(process.resourcesPath, 'poppler')  // Bundled Poppler
-    ];
+    const os = require('os');
+    const platform = os.platform();
+    
+    let commonPaths = [];
+    
+    if (platform === 'darwin') {
+      // macOS paths
+      commonPaths = [
+        '/usr/local/bin',           // Homebrew on Intel Macs, Nexa, Ollama
+        '/opt/homebrew/bin',        // Homebrew on Apple Silicon Macs
+        '/usr/bin',                 // System binaries
+        path.join(process.resourcesPath, 'poppler')  // Bundled Poppler
+      ];
+    } else if (platform === 'win32') {
+      // Windows paths
+      commonPaths = [
+        'C:\\Program Files\\Nexa',
+        'C:\\Program Files\\Ollama',
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Ollama'),
+        path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Nexa'),
+        'C:\\Program Files\\poppler\\bin',
+        path.join(process.resourcesPath, 'poppler')
+      ];
+    } else {
+      // Linux paths
+      commonPaths = [
+        '/usr/local/bin',
+        '/usr/bin',
+        '/opt/nexa/bin',
+        '/opt/ollama/bin',
+        path.join(os.homedir(), '.local', 'bin'),
+        path.join(process.resourcesPath, 'poppler')
+      ];
+    }
     
     const pathsToAdd = commonPaths.filter(p => fs.existsSync(p));
     

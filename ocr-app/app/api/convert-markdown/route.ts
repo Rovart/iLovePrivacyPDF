@@ -5,6 +5,7 @@ import { join } from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { getRustBinaryPath } from '@/lib/rust-binary';
+import { getUploadsDir, getOutputsDir } from '@/lib/paths';
 
 const execAsync = promisify(exec);
 
@@ -23,9 +24,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Create necessary directories
-    const uploadsDir = join(process.cwd(), 'public', 'uploads');
-    const outputDir = join(process.cwd(), 'public', 'outputs');
-    
+    const uploadsDir = getUploadsDir();
+    const outputDir = getOutputsDir();
+
     if (!existsSync(uploadsDir)) {
       await mkdir(uploadsDir, { recursive: true });
     }
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     // Get the Rust binary path
     const rustBinaryPath = getRustBinaryPath();
-    
+
     // Generate output filename
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     const outputPdf = join(outputDir, `documento_${timestamp}.pdf`);
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // Return URL to download PDF
     const pdfFilename = outputPdf.split('/').pop();
-    
+
     // Clean up uploaded markdown file after successful processing
     try {
       await unlink(inputPath);
@@ -61,10 +62,10 @@ export async function POST(request: NextRequest) {
     } catch (cleanupError) {
       console.error('Error cleaning up uploaded file:', cleanupError);
     }
-    
+
     return NextResponse.json({
       success: true,
-      pdf_url: `/api/serve-image?path=output/${pdfFilename}&t=${Date.now()}`,
+      pdf_url: `/api/serve-image?path=outputs/${pdfFilename}&t=${Date.now()}`,
       markdown_url: `/api/serve-image?path=uploads/${file.name}&t=${Date.now()}`,
     });
   } catch (error: any) {

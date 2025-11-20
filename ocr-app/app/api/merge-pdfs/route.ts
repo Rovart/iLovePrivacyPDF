@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { PDFDocument } from 'pdf-lib';
+import { getOutputsDir } from '@/lib/paths';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,8 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create output directory if it doesn't exist
-    const outputDir = path.join(process.cwd(), 'public', 'outputs');
-    await mkdir(outputDir, { recursive: true });
+    const outputDir = getOutputsDir();
 
     // Create a new PDF document
     const mergedPdf = await PDFDocument.create();

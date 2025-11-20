@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use clap::{Parser, Subcommand};
+use lopdf::{Document, Object};
 use pdf_extract::extract_text;
 use printpdf::{IndirectFontRef, Line, Mm, PdfLayerReference, Point};
 use regex::Regex;
@@ -116,6 +117,21 @@ enum Commands {
         /// Remove OCR coordinates and internal markers for clean output
         #[arg(long)]
         clean: bool,
+    },
+    /// Split and reorder PDF pages
+    SplitPdf {
+        /// Input PDF file
+        #[arg(short, long)]
+        input: PathBuf,
+
+        /// Output PDF file
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Comma-separated list of page numbers to extract and their order (1-based)
+        /// Example: "1,3,2" extracts pages 1,3,2 and outputs them in that order
+        #[arg(short, long)]
+        pages: String,
     },
 }
 
@@ -235,14 +251,76 @@ async fn main() -> Result<()> {
             
             if let Some(output_path) = output {
                 fs::write(output_path, &processed)?;
-                println!("✓ Markdown saved to: {}", output_path.display());
+                println!("✓ Processed markdown saved to: {}", output_path.display());
             } else {
                 println!("{}", processed);
             }
         }
+        Commands::SplitPdf { input, output, pages } => {
+            println!("Splitting PDF: {} -> {}", input.display(), output.display());
+            println!("Page order: {}", pages);
+            
+            split_pdf(input, output, pages)?;
+            println!("✓ PDF split successfully: {}", output.display());
+        }
     }
 
     Ok(())
+}
+
+fn split_pdf(input: &Path, output: &Path, pages_str: &str) -> Result<()> {
+    use std::process::Command;
+    
+    // Parse page numbers
+    let page_numbers: Vec<u32> = pages_str
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse::<u32>())
+        .collect::<Result<Vec<u32>, _>>()
+        .context("Failed to parse page numbers")?;
+    
+    if page_numbers.is_empty() {
+        anyhow::bail!("No page numbers provided");
+    }
+    
+    println!("Splitting PDF: {} pages selected", page_numbers.len());
+    
+    // Try qpdf first (better quality preservation)
+    let qpdf_result = Command::new("qpdf")
+        .arg("--empty")
+        .arg("--pages")
+        .arg(input)
+        .arg(pages_str)
+        .arg("--")
+        .arg(output)
+        .output();
+    
+    if let Ok(output_result) = qpdf_result {
+        if output_result.status.success() {
+            println!("✓ PDF split successfully with qpdf");
+            return Ok(());
+        }
+    }
+    
+    // Fallback to pdftk
+    // Build pdftk command: pdftk input.pdf cat 1 3 2 output output.pdf
+    let pdftk_result = Command::new("pdftk")
+        .arg(input)
+        .arg("cat")
+        .args(page_numbers.iter().map(|n| n.to_string()))
+        .arg("output")
+        .arg(output)
+        .output();
+    
+    if let Ok(output_result) = pdftk_result {
+        if output_result.status.success() {
+            println!("✓ PDF split successfully with pdftk");
+            return Ok(());
+        }
+    }
+    
+    anyhow::bail!("PDF split requires qpdf or pdftk to be installed. Install with: brew install qpdf or brew install pdftk-java")
 }
 
 async fn process_image(image_path: &Path, model: &str, custom_prompt: Option<&str>, use_coordinates: bool) -> Result<String> {

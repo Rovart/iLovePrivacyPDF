@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { getStoragePath, getWritableRoot } from '@/lib/paths';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,11 +18,11 @@ export async function GET(request: NextRequest) {
 
     // Sanitize the path to prevent directory traversal
     const sanitizedPath = imagePath.replace(/^\//, '');
-    const fullPath = path.join(process.cwd(), 'public', sanitizedPath);
+    const fullPath = getStoragePath(sanitizedPath);
 
-    // Verify the file exists and is within the public directory
-    const publicDir = path.join(process.cwd(), 'public');
-    if (!fullPath.startsWith(publicDir)) {
+    // Verify the file exists and is within the storage directory
+    const storageRoot = getWritableRoot();
+    if (!fullPath.startsWith(storageRoot)) {
       return NextResponse.json(
         { success: false, error: 'Invalid path' },
         { status: 403 }
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     // Read the file
     const imageBuffer = await readFile(fullPath);
-    
+
     // Determine content type based on file extension
     const ext = path.extname(fullPath).toLowerCase();
     const contentTypes: { [key: string]: string } = {
@@ -50,14 +51,14 @@ export async function GET(request: NextRequest) {
       '.pdf': 'application/pdf',
       '.md': 'text/markdown',
     };
-    
+
     const contentType = contentTypes[ext] || 'application/octet-stream';
 
     // Determine Content-Disposition based on file type
     const isPdf = ext === '.pdf';
     const isMarkdown = ext === '.md';
-    const contentDisposition = (isPdf || isMarkdown) 
-      ? `attachment; filename="${path.basename(fullPath)}"` 
+    const contentDisposition = (isPdf || isMarkdown)
+      ? `attachment; filename="${path.basename(fullPath)}"`
       : 'inline';
 
     // Return the file with proper headers

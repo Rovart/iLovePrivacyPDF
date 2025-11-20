@@ -5,6 +5,7 @@ import { join } from 'path';
 import { spawn, spawnSync, exec } from 'child_process';
 import { promisify } from 'util';
 import { getRustBinaryPath } from '@/lib/rust-binary';
+import { getUploadsDir, getOutputsDir, getTempImagesDir } from '@/lib/paths';
 
 const execAsync = promisify(exec);
 
@@ -113,9 +114,9 @@ export async function POST(request: NextRequest) {
         }
 
         // Create necessary directories
-        const uploadsDir = join(process.cwd(), 'public', 'uploads');
-        const outputDir = join(process.cwd(), 'public', 'outputs');
-        const tempDir = join(process.cwd(), 'public', 'temp_images');
+        const uploadsDir = getUploadsDir();
+        const outputDir = getOutputsDir();
+        const tempDir = getTempImagesDir();
         
         for (const dir of [uploadsDir, outputDir, tempDir]) {
           if (!existsSync(dir)) {

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { getOutputsDir, getStoragePath } from '@/lib/paths';
 
-const HISTORY_FILE = join(process.cwd(), 'public', 'outputs', '.history.json');
+const HISTORY_FILE = getStoragePath('outputs', '.history.json');
 
 type HistoryItem = {
   id: string;
@@ -19,7 +20,7 @@ type HistoryItem = {
 export async function GET() {
   try {
     // Ensure outputs directory exists
-    const outputDir = join(process.cwd(), 'public', 'outputs');
+    const outputDir = getOutputsDir();
     if (!existsSync(outputDir)) {
       await mkdir(outputDir, { recursive: true });
     }
@@ -38,16 +39,16 @@ export async function GET() {
       // Helper function to extract filename from various URL formats
       const extractFilename = (url: string): string | null => {
         if (!url) return null;
-        
+
         // Handle /api/serve-image?path=outputs/filename format
         if (url.includes('?path=')) {
           const pathMatch = url.match(/path=outputs%2F(.+?)(?:&|$)/);
           if (pathMatch) return decodeURIComponent(pathMatch[1].split('?')[0]);
-          
+
           const pathMatch2 = url.match(/path=outputs\/(.+?)(?:&|$)/);
           if (pathMatch2) return pathMatch2[1].split('?')[0];
         }
-        
+
         // Handle direct /api/serve-image?path=outputs/filename&t=... format
         if (url.includes('/api/serve-image')) {
           const urlObj = new URL(url, 'http://localhost');
@@ -56,13 +57,13 @@ export async function GET() {
             return pathParam.replace('outputs/', '');
           }
         }
-        
+
         // Handle direct file paths like /api/serve-image?path=outputs/filename
         const simpleMatch = url.split('?')[0].split('/').pop();
         if (simpleMatch && !simpleMatch.includes('serve-image')) {
           return simpleMatch;
         }
-        
+
         return null;
       };
 
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure outputs directory exists
-    const outputDir = join(process.cwd(), 'public', 'outputs');
+    const outputDir = getOutputsDir();
     if (!existsSync(outputDir)) {
       await mkdir(outputDir, { recursive: true });
     }

@@ -3,6 +3,7 @@ import { writeFile, mkdir, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import sharp from 'sharp';
+import { getOutputsDir } from '@/lib/paths';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,11 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create necessary directories
-    const outputDir = join(process.cwd(), 'public', 'outputs');
-    
-    if (!existsSync(outputDir)) {
-      await mkdir(outputDir, { recursive: true });
-    }
+    const outputDir = getOutputsDir();
 
     // Read the uploaded file
     const bytes = await file.arrayBuffer();

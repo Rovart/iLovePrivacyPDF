@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { getOutputsDir } from '@/lib/paths';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid request' }, { status: 400 });
     }
 
-    const outputDir = join(process.cwd(), 'public', 'outputs');
+    const outputDir = getOutputsDir();
     const existingFiles: string[] = [];
 
     for (const file of files) {
