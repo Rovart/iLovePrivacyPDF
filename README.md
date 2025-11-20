@@ -1,6 +1,6 @@
 # iLovePrivacyPDF
 
-![iLovePrivacyPDF](https://raw.githubusercontent.com/Rovart/iLovePrivacyPDF/main/.github/iLovePDF.png)
+![iLovePrivacyPDF](https://github.com/Rovart/iLovePrivacyPDF/blob/fed4a587d6ad5c875dc9b6cbd6d325563edd4226/.github/iLovePDF.png)
 
 A **privacy-first**, high-performance document processing application built with **Next.js** and **Rust**. Process your sensitive documents locally without sending data to cloud services. Extract text via AI-powered OCR, convert markdown to PDF, merge PDFs, and more—all on your own machine.
 
