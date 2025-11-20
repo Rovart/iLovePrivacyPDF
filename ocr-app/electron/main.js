@@ -252,12 +252,21 @@ app.whenReady().then(async () => {
   console.log('╚════════════════════════════════════════╝');
   console.log('');
   
-  // Add bundled Poppler binaries to PATH for packaged app
+  // Add common binary paths to PATH for packaged app
+  // This ensures Nexa, Ollama, and other CLI tools are found
   if (app.isPackaged) {
-    const popplerPath = path.join(process.resourcesPath, 'poppler');
-    if (fs.existsSync(popplerPath)) {
-      process.env.PATH = `${popplerPath}${path.delimiter}${process.env.PATH}`;
-      console.log('✓ Added bundled Poppler to PATH:', popplerPath);
+    const commonPaths = [
+      '/usr/local/bin',           // Common for Homebrew on Intel Macs, Nexa, Ollama
+      '/opt/homebrew/bin',        // Homebrew on Apple Silicon Macs
+      '/usr/bin',                 // System binaries
+      path.join(process.resourcesPath, 'poppler')  // Bundled Poppler
+    ];
+    
+    const pathsToAdd = commonPaths.filter(p => fs.existsSync(p));
+    
+    if (pathsToAdd.length > 0) {
+      process.env.PATH = `${pathsToAdd.join(path.delimiter)}${path.delimiter}${process.env.PATH}`;
+      console.log('✓ Added to PATH:', pathsToAdd.join(', '));
     }
   }
   
