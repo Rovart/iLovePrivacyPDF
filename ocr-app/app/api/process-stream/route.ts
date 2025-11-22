@@ -12,10 +12,10 @@ const execAsync = promisify(exec);
 // Helper to check if server is running
 async function isServerRunning(port: number): Promise<boolean> {
   try {
-    const url = port === 18181 
+    const url = port === 18181
       ? 'http://127.0.0.1:18181/v1/models'
       : 'http://127.0.0.1:11434/api/tags';
-    
+
     const response = await fetch(url, { signal: AbortSignal.timeout(2000) });
     return response.ok;
   } catch {
@@ -27,18 +27,18 @@ async function isServerRunning(port: number): Promise<boolean> {
 async function stopServer(model: string): Promise<void> {
   const isNexa = model.includes('NexaAI') || model.includes('GGUF');
   const port = isNexa ? 18181 : 11434;
-  
+
   console.log(`Stopping ${isNexa ? 'Nexa' : 'Ollama'} server to free VRAM...`);
-  
+
   try {
     if (isNexa) {
       // Kill nexa serve processes
-      await execAsync('pkill -f "nexa serve"').catch(() => {});
+      await execAsync('pkill -f "nexa serve"').catch(() => { });
     } else {
       // Kill ollama serve processes
-      await execAsync('killall ollama').catch(() => {});
+      await execAsync('killall ollama').catch(() => { });
     }
-    
+
     // Wait a moment for graceful shutdown
     await new Promise(resolve => setTimeout(resolve, 2000));
     console.log(`${isNexa ? 'Nexa' : 'Ollama'} server stopped`);
@@ -51,20 +51,20 @@ async function stopServer(model: string): Promise<void> {
 async function ensureServerRunning(model: string): Promise<void> {
   const isNexa = model.includes('NexaAI') || model.includes('GGUF');
   const port = isNexa ? 18181 : 11434;
-  
+
   if (await isServerRunning(port)) {
     console.log(`Server already running on port ${port}`);
     return;
   }
-  
+
   console.log(`Starting ${isNexa ? 'Nexa' : 'Ollama'} server...`);
-  
+
   if (isNexa) {
     spawn('nexa', ['serve', '--host', '127.0.0.1:18181'], {
       detached: true,
       stdio: 'ignore'
     }).unref();
-    
+
     // Wait for server to be ready
     for (let i = 0; i < 15; i++) {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -79,7 +79,7 @@ async function ensureServerRunning(model: string): Promise<void> {
       detached: true,
       stdio: 'ignore'
     }).unref();
-    
+
     // Wait for server to be ready
     for (let i = 0; i < 10; i++) {
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -94,18 +94,23 @@ async function ensureServerRunning(model: string): Promise<void> {
 
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
-  
+
   const stream = new ReadableStream({
     async start(controller) {
-      let ocrModel = 'NexaAI/DeepSeek-OCR-GGUF:BF16'; // Default, will be overwritten
+      let ocrModel = 'deepseek-ocr'; // Default, will be overwritten
       try {
         const formData = await request.formData();
         const files = formData.getAll('files') as File[];
         const useCoordinates = formData.get('useCoordinates') === 'true';
-        ocrModel = formData.get('ocrModel') as string || 'NexaAI/DeepSeek-OCR-GGUF:BF16';
+        ocrModel = formData.get('ocrModel') as string || 'deepseek-ocr';
         const joinImages = formData.get('joinImages') === 'true';
         const customPrompt = formData.get('customPrompt') as string | null;
         const useGroundingMode = formData.get('useGroundingMode') !== 'false'; // Default to true
+
+        console.log('DEBUG: FormData values:');
+        console.log('  useGroundingMode from formData:', formData.get('useGroundingMode'));
+        console.log('  useGroundingMode (parsed):', useGroundingMode);
+        console.log('  Will add --disable-grounding-mode?:', !useGroundingMode);
 
         if (files.length === 0) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'No files provided' })}\n\n`));
@@ -117,7 +122,7 @@ export async function POST(request: NextRequest) {
         const uploadsDir = getUploadsDir();
         const outputDir = getOutputsDir();
         const tempDir = getTempImagesDir();
-        
+
         for (const dir of [uploadsDir, outputDir, tempDir]) {
           if (!existsSync(dir)) {
             await mkdir(dir, { recursive: true });
@@ -152,28 +157,28 @@ export async function POST(request: NextRequest) {
           savedFiles.push(filePath);
         }
 
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-          status: 'uploading', 
-          message: `Uploaded ${files.length} file(s)` 
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          status: 'uploading',
+          message: `Uploaded ${files.length} file(s)`
         })}\n\n`));
 
         // Ensure the required server is running before processing
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            status: 'starting', 
-            message: 'Starting OCR engine...' 
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            status: 'starting',
+            message: 'Starting OCR engine...'
           })}\n\n`));
-          
+
           await ensureServerRunning(ocrModel);
-          
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            status: 'ready', 
-            message: 'OCR engine ready' 
+
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            status: 'ready',
+            message: 'OCR engine ready'
           })}\n\n`));
         } catch (error: any) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            status: 'error', 
-            error: `Failed to start OCR engine: ${error.message}` 
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            status: 'error',
+            error: `Failed to start OCR engine: ${error.message}`
           })}\n\n`));
           controller.close();
           return;
@@ -181,7 +186,7 @@ export async function POST(request: NextRequest) {
 
         // Get the Rust binary path
         const rustBinaryPath = getRustBinaryPath();
-        
+
         // Generate output filename
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
         const outputMarkdown = join(outputDir, `documento_${timestamp}.md`);
@@ -189,14 +194,14 @@ export async function POST(request: NextRequest) {
 
         // Determine if we have PDFs or images
         const hasPdf = savedFiles.some(f => f.endsWith('.pdf'));
-        
-  let args: string[];
+
+        let args: string[];
         if (hasPdf && savedFiles.length === 1) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            status: 'extracting', 
-            message: 'Extracting pages from PDF...' 
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            status: 'extracting',
+            message: 'Extracting pages from PDF...'
           })}\n\n`));
-          
+
           // Check for pdftoppm availability before running Rust processing
           const whichResult = spawnSync('which', ['pdftoppm']);
           const hasPdftoppm = whichResult.status === 0;
@@ -239,43 +244,46 @@ export async function POST(request: NextRequest) {
             } else {
               args = ['process-pdf', '--input', savedFiles[0], '--output', outputMarkdown, '--temp-dir', tempDir];
             }
-            }
+          }
           else {
             args = ['process-pdf', '--input', savedFiles[0], '--output', outputMarkdown, '--temp-dir', tempDir];
           }
         } else {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-            status: 'processing', 
-            message: 'Processing images...' 
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            status: 'processing',
+            message: 'Processing images...'
           })}\n\n`));
-          
+
           args = ['process-dir', '--input', uploadsDir, '--output', outputMarkdown];
-          
+
           // Add model parameter
           if (ocrModel) {
             args.push('--model', ocrModel);
           }
-          
+
           // Add custom prompt parameter (works for both NexaAI and Ollama models)
           if (customPrompt && customPrompt.trim()) {
             args.push('--custom-prompt', customPrompt.trim());
           }
-          
+
           // Add disable-grounding-mode flag for NexaAI models when Photo mode is selected
-          if ((ocrModel.includes('NexaAI') || ocrModel.includes('GGUF')) && !useGroundingMode) {
+          // Add disable-grounding-mode flag when Photo mode is selected (works for both Nexa and Ollama)
+          if (!useGroundingMode) {
             args.push('--disable-grounding-mode');
           }
-          
+
           // Add use-coordinates flag if enabled
           if (useCoordinates) {
             args.push('--use-coordinates');
           }
-          
+
           // Add join-images flag if enabled
           if (joinImages) {
             args.push('--join-images');
           }
         }
+
+        console.log('Spawning Rust process with args:', args.join(' '));
 
         // Execute Rust OCR processor with streaming output
         const rustProcess = spawn(rustBinaryPath, args);
@@ -283,20 +291,20 @@ export async function POST(request: NextRequest) {
         rustProcess.stdout.on('data', (data) => {
           const output = data.toString();
           console.log('Rust stdout:', output);
-          
+
           // Parse progress from output
           const progressMatch = output.match(/\[(\d+)\/(\d+)\]\s+(\d+)%/);
           if (progressMatch) {
             const [, current, total, percentage] = progressMatch;
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-              status: 'processing', 
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              status: 'processing',
               message: `Processing image ${current}/${total}`,
               progress: parseInt(percentage)
             })}\n\n`));
           } else if (output.includes('Processing')) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-              status: 'processing', 
-              message: output.trim() 
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              status: 'processing',
+              message: output.trim()
             })}\n\n`));
           }
         });
@@ -316,9 +324,9 @@ export async function POST(request: NextRequest) {
           rustProcess.on('error', reject);
         });
 
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-          status: 'converting', 
-          message: 'Converting to PDF...' 
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          status: 'converting',
+          message: 'Converting to PDF...'
         })}\n\n`));
 
         // Convert markdown to PDF using Rust
@@ -330,7 +338,7 @@ export async function POST(request: NextRequest) {
         if (useCoordinates) {
           pdfArgs.push('--use-coordinates');
         }
-        
+
         console.log('PDF conversion command:', rustBinaryPath, pdfArgs.join(' '));
         const pdfProcess = spawn(rustBinaryPath, pdfArgs);
 
@@ -386,9 +394,9 @@ export async function POST(request: NextRequest) {
           status: 'cleanup',
           message: 'Freeing VRAM...'
         })}\n\n`));
-        
+
         await stopServer(ocrModel);
-        
+
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({
           status: 'done',
           message: 'Memory freed'
@@ -396,11 +404,11 @@ export async function POST(request: NextRequest) {
 
       } catch (error: any) {
         console.error('Processing error:', error);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-          status: 'error', 
-          error: error.message || 'Processing failed' 
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+          status: 'error',
+          error: error.message || 'Processing failed'
         })}\n\n`));
-        
+
         // Also stop server on error to free VRAM
         try {
           await stopServer(ocrModel);

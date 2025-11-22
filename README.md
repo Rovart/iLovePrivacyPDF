@@ -69,9 +69,21 @@ A **privacy-first**, high-performance document processing application built with
 
 The application uses **locally-hosted** OCR models (no cloud API calls):
 
-> **⭐ Recommended**: Use **NexaAI DeepSeek-OCR** for the best accuracy and performance. It's optimized for document processing and works offline.
+> **⭐ Default**: The app is configured to use **Ollama** by default. Both NexaAI and Ollama run entirely offline with no cloud connections.
 
-#### NexaAI DeepSeek-OCR (Recommended)
+#### Ollama (Default)
+```bash
+# Install Ollama from https://ollama.ai
+# Pull a vision model (downloads to your machine)
+ollama pull llama3.2-vision:latest
+
+# Start server (local only, no internet required)
+ollama serve
+```
+
+**Recommended models**: `llama3.2-vision`, `gemma3:12b`, `qwen2-vl`
+
+#### NexaAI DeepSeek-OCR (Alternative)
 ```bash
 # Install Nexa CLI
 pipx install nexa
@@ -84,16 +96,6 @@ nexa serve --host 127.0.0.1:18181
 ```
 
 **Note**: The first time you run `nexa infer`, it will download the DeepSeek-OCR model (~3-4GB) and cache it locally. Subsequent starts will be instant.
-
-#### Ollama
-```bash
-# Install Ollama from https://ollama.ai
-# Pull a vision model (downloads to your machine)
-ollama pull gemma3:12b
-
-# Start server (local only, no internet required)
-ollama serve
-```
 
 **Privacy Note**: Both engines run entirely on your machine. No data is sent to external servers.
 
@@ -266,8 +268,8 @@ npm run electron:build:linux   # Linux (AppImage + DEB)
 | **Frontend** | Next.js + React | 16.0 / 19 |
 | **Backend** | Rust | 1.70+ |
 | **Desktop** | Electron | 39+ |
-| **OCR API 1** | NexaAI DeepSeek-OCR | GGUF:BF16 |
-| **OCR API 2** | Ollama (vision models) | Latest |
+| **OCR API (Default)** | Ollama (vision models) | Latest |
+| **OCR API (Alt)** | NexaAI DeepSeek-OCR | GGUF:BF16 |
 | **Styling** | Tailwind CSS | 4.0 |
 | **PDF Gen** | printpdf | 0.7 |
 | **Image Processing** | Sharp | 0.34 |

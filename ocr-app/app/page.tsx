@@ -92,21 +92,21 @@ type ModelInfo = {
   id: string;
   label: string;
   provider: 'nexa' | 'ollama';
-  status: 'available' | 'unavailable';
+  status: 'available' | 'unavailable' | 'missing';
   error?: string;
 };
 
 // Sortable page item component with lazy-loaded thumbnail
-function SortablePageItem({ 
-  pageNum, 
-  isSelected, 
-  onToggle, 
+function SortablePageItem({
+  pageNum,
+  isSelected,
+  onToggle,
   darkMode,
   thumbnailUrl
-}: { 
-  pageNum: number; 
-  isSelected: boolean; 
-  onToggle: () => void; 
+}: {
+  pageNum: number;
+  isSelected: boolean;
+  onToggle: () => void;
   darkMode: boolean;
   thumbnailUrl?: string;
 }) {
@@ -344,7 +344,7 @@ export default function Home() {
     count?: number;
   }>({});
   const [darkMode, setDarkMode] = useState(false);
-  const [ocrModel, setOcrModel] = useState<string>('NexaAI/DeepSeek-OCR-GGUF:BF16');
+  const [ocrModel, setOcrModel] = useState<string>('deepseek-ocr');
   const [joinImages, setJoinImages] = useState(false);
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [useGroundingMode, setUseGroundingMode] = useState(true);
@@ -359,6 +359,8 @@ export default function Home() {
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [pagesExtracted, setPagesExtracted] = useState(false);
   const [pageThumbnails, setPageThumbnails] = useState<Map<number, string>>(new Map());
+  const [installingModel, setInstallingModel] = useState(false);
+  const [installProgress, setInstallProgress] = useState<string>('');
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -409,6 +411,12 @@ export default function Home() {
           // Fallback to hardcoded models
           setAvailableModels([
             {
+              id: 'deepseek-ocr',
+              label: 'DeepSeek OCR (Ollama) - Connection failed',
+              provider: 'ollama',
+              status: 'unavailable'
+            },
+            {
               id: 'NexaAI/DeepSeek-OCR-GGUF:BF16',
               label: 'DeepSeek OCR (NexaAI) - Connection failed',
               provider: 'nexa',
@@ -421,6 +429,12 @@ export default function Home() {
         setModelsError('Failed to check OCR model availability');
         // Fallback to hardcoded models  
         setAvailableModels([
+          {
+            id: 'deepseek-ocr',
+            label: 'DeepSeek OCR (Ollama) - Connection failed',
+            provider: 'ollama',
+            status: 'unavailable'
+          },
           {
             id: 'NexaAI/DeepSeek-OCR-GGUF:BF16',
             label: 'DeepSeek OCR (NexaAI) - Connection failed',
@@ -632,7 +646,7 @@ export default function Home() {
         // Select all pages by default
         setSelectedPages(new Set(pages));
         setStatus(`PDF loaded: ${pageCount} pages. Generating thumbnails...`);
-        
+
         // Generate thumbnails in the background
         generateThumbnails(file, pageCount);
       } else {
@@ -644,6 +658,59 @@ export default function Home() {
     }
   };
 
+  const installModel = async (modelId: string) => {
+    try {
+      setInstallingModel(true);
+      setInstallProgress('Starting download...');
+
+      const response = await fetch('/api/pull-model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelId }),
+      });
+
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.status === 'complete') {
+                setInstallProgress('Installation complete!');
+                // Refresh models
+                const modelsResponse = await fetch('/api/models');
+                const modelsData = await modelsResponse.json();
+                if (modelsData.success) {
+                  setAvailableModels(modelsData.models);
+                }
+              } else if (data.error) {
+                setInstallProgress(`Error: ${data.error}`);
+              } else {
+                setInstallProgress(data.message);
+              }
+            } catch (e) {
+              console.error('Parse error:', e);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Install error:', error);
+      setInstallProgress(`Failed to install: ${error.message}`);
+    } finally {
+      setInstallingModel(false);
+    }
+  };
   const generateThumbnails = async (file: File, pageCount: number) => {
     try {
       const formData = new FormData();
@@ -657,7 +724,7 @@ export default function Home() {
       });
 
       const data = await response.json();
-      
+
       if (data.success && data.images) {
         const thumbnailMap = new Map<number, string>();
         data.images.forEach((imgUrl: string, index: number) => {
@@ -674,6 +741,17 @@ export default function Home() {
 
   const processFiles = async () => {
     if (files.length === 0) return;
+
+    // Check if selected model is missing
+    const selectedModelInfo = availableModels.find(m => m.id === ocrModel);
+    if (selectedModelInfo?.status === 'missing') {
+      if (confirm(`The model '${selectedModelInfo.label}' is not installed. Do you want to install it now? (This may take a few minutes)`)) {
+        await installModel(ocrModel);
+        return; // Stop processing to allow install
+      } else {
+        return; // User cancelled
+      }
+    }
 
     setProcessing(true);
     setStatus('Uploading files...');
@@ -693,7 +771,7 @@ export default function Home() {
     if ((selectedModel?.provider === 'ollama' || selectedModel?.provider === 'nexa') && customPrompt.trim()) {
       formData.append('customPrompt', customPrompt.trim());
     }
-    if (selectedModel?.provider === 'nexa') {
+    if (selectedModel?.provider === 'nexa' || selectedModel?.provider === 'ollama') {
       formData.append('useGroundingMode', useGroundingMode.toString());
     }
 
@@ -896,7 +974,7 @@ export default function Home() {
               setPagesExtracted(true);
               setStatus(`✓ PDF loaded: ${pageCount} pages. Select and reorder the pages you want to keep.`);
               setProgress(100);
-              
+
               // Generate thumbnails in the background
               generateThumbnails(files[0].file, pageCount);
             } else {
@@ -1191,7 +1269,7 @@ export default function Home() {
           </div>
 
           {/* Old Mode tabs - Hidden */}
-          <div className="flex gap-4 justify-center mb-4 flex-wrap" style={{display: 'none'}}>
+          <div className="flex gap-4 justify-center mb-4 flex-wrap" style={{ display: 'none' }}>
             <button
               onClick={() => setMode('ocr')}
               className={`px-6 py-3 border-2 font-mono uppercase tracking-wider text-sm transition-all ${mode === 'ocr'
@@ -1870,71 +1948,88 @@ export default function Home() {
                       ? 'border-[#444] bg-[rgba(255,255,255,0.05)]'
                       : 'border-[#d4d0c5] bg-[rgba(255,255,255,0.4)]'
                       }`}>
-                      <label className={`font-mono text-sm font-bold uppercase tracking-wider block mb-2 ${darkMode ? 'text-[#ccc]' : 'text-[#1a1a1a]'
-                        }`}>
-                        Custom Prompt (Optional)
-                      </label>
-                      <textarea
-                        value={customPrompt}
-                        onChange={(e) => setCustomPrompt(e.target.value)}
-                        placeholder="Specify what fields to extract and how to structure the output (e.g., 'Extract: Name, Date, Amount. Format as markdown table', 'Extract invoice details: vendor, date, total, items with descriptions')"
-                        rows={4}
-                        className={`w-full px-3 py-2 border-2 font-mono text-sm transition-all resize-none ${darkMode
-                          ? 'bg-[#1a1a1a] text-[#ccc] border-[#444] focus:border-[#ffd700] placeholder-[#666]'
-                          : 'bg-white text-[#1a1a1a] border-[#1a1a1a] focus:border-[#2d4f7c] placeholder-[#999]'
-                          }`}
-                      />
-                      <div className={`text-xs mt-1 font-mono ${darkMode ? 'text-[#999]' : 'text-[#666]'
-                        }`}>
-                        💡 Specify what information to extract and how to structure the markdown output
-                      </div>
-
-                      {/* NexaAI Mode Toggle - only show for NexaAI models */}
+                      {/* Custom Prompt - Hide for DeepSeek models */}
                       {(() => {
                         const selectedModel = availableModels.find(m => m.id === ocrModel);
-                        return selectedModel?.provider === 'nexa';
-                      })() && (
-                          <div className="mt-4 pt-4 border-t ${
-                    darkMode ? 'border-[#444]' : 'border-[#d4d0c5]'
-                  }">
-                            <label className={`font-mono text-sm font-bold uppercase tracking-wider block mb-3 ${darkMode ? 'text-[#ccc]' : 'text-[#1a1a1a]'
+                        // Check if model ID includes deepseek (handle version tags)
+                        const isDeepSeek = ocrModel?.toLowerCase().includes('deepseek') ||
+                          selectedModel?.id.toLowerCase().includes('deepseek');
+
+                        if (!isDeepSeek) {
+                          return (
+                            <>
+                              <label className={`font-mono text-sm font-bold uppercase tracking-wider block mb-2 ${darkMode ? 'text-[#ccc]' : 'text-[#1a1a1a]'
+                                }`}>
+                                Custom Prompt (Optional)
+                              </label>
+                              <textarea
+                                value={customPrompt}
+                                onChange={(e) => setCustomPrompt(e.target.value)}
+                                placeholder="Specify what fields to extract and how to structure the output (e.g., 'Extract: Name, Date, Amount. Format as markdown table', 'Extract invoice details: vendor, date, total, items with descriptions')"
+                                rows={4}
+                                className={`w-full px-3 py-2 border-2 font-mono text-sm transition-all resize-none ${darkMode
+                                  ? 'bg-[#1a1a1a] text-[#ccc] border-[#444] focus:border-[#ffd700] placeholder-[#666]'
+                                  : 'bg-white text-[#1a1a1a] border-[#1a1a1a] focus:border-[#2d4f7c] placeholder-[#999]'
+                                  }`}
+                              />
+                              <div className={`text-xs mt-1 font-mono ${darkMode ? 'text-[#999]' : 'text-[#666]'
+                                }`}>
+                                💡 Specify what information to extract and how to structure the markdown output
+                              </div>
+                            </>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* OCR Mode Toggle - show for Nexa and Ollama models */}
+                      {(() => {
+                        const selectedModel = availableModels.find(m => m.id === ocrModel);
+                        if (selectedModel?.provider === 'nexa' || selectedModel?.provider === 'ollama') {
+                          return (
+                            <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-[#444]' : 'border-[#d4d0c5]'
                               }`}>
-                              OCR Mode
-                            </label>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => setUseGroundingMode(true)}
-                                className={`flex-1 px-4 py-3 border-2 font-mono text-xs uppercase tracking-wider transition-all ${useGroundingMode
-                                  ? darkMode
-                                    ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]'
-                                    : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
-                                  : darkMode
-                                    ? 'bg-[#3a3a3a] text-[#ccc] border-[#555] hover:bg-[#444]'
-                                    : 'bg-white text-[#666] border-[#ccc] hover:bg-[#f0f0f0]'
-                                  }`}>
-                                📄 Document Mode
-                              </button>
-                              <button
-                                onClick={() => setUseGroundingMode(false)}
-                                className={`flex-1 px-4 py-3 border-2 font-mono text-xs uppercase tracking-wider transition-all ${!useGroundingMode
-                                  ? darkMode
-                                    ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]'
-                                    : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
-                                  : darkMode
-                                    ? 'bg-[#3a3a3a] text-[#ccc] border-[#555] hover:bg-[#444]'
-                                    : 'bg-white text-[#666] border-[#ccc] hover:bg-[#f0f0f0]'
-                                  }`}>
-                                📷 Photo Mode
-                              </button>
+                              <label className={`font-mono text-sm font-bold uppercase tracking-wider block mb-3 ${darkMode ? 'text-[#ccc]' : 'text-[#1a1a1a]'
+                                }`}>
+                                OCR Mode
+                              </label>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setUseGroundingMode(true)}
+                                  className={`flex-1 px-4 py-3 border-2 font-mono text-xs uppercase tracking-wider transition-all ${useGroundingMode
+                                    ? darkMode
+                                      ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]'
+                                      : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
+                                    : darkMode
+                                      ? 'bg-[#3a3a3a] text-[#ccc] border-[#555] hover:bg-[#444]'
+                                      : 'bg-white text-[#666] border-[#ccc] hover:bg-[#f0f0f0]'
+                                    }`}>
+                                  📄 Document Mode
+                                </button>
+                                <button
+                                  onClick={() => setUseGroundingMode(false)}
+                                  className={`flex-1 px-4 py-3 border-2 font-mono text-xs uppercase tracking-wider transition-all ${!useGroundingMode
+                                    ? darkMode
+                                      ? 'bg-[#ffd700] text-[#1a1a1a] border-[#ffd700]'
+                                      : 'bg-[#1a1a1a] text-[#f4f1e8] border-[#1a1a1a]'
+                                    : darkMode
+                                      ? 'bg-[#3a3a3a] text-[#ccc] border-[#555] hover:bg-[#444]'
+                                      : 'bg-white text-[#666] border-[#ccc] hover:bg-[#f0f0f0]'
+                                    }`}>
+                                  📷 Photo Mode
+                                </button>
+                              </div>
+                              <div className={`text-xs mt-2 font-mono ${darkMode ? 'text-[#999]' : 'text-[#666]'
+                                }`}>
+                                {useGroundingMode
+                                  ? '📄 Uses grounding tags for structured document OCR (default)'
+                                  : '📷 Free OCR for photos with text (no grounding tags)'}
+                              </div>
                             </div>
-                            <div className={`text-xs mt-2 font-mono ${darkMode ? 'text-[#999]' : 'text-[#666]'
-                              }`}>
-                              {useGroundingMode
-                                ? '📄 Uses grounding tags for structured document OCR (default)'
-                                : '📷 Free OCR for photos with text (no grounding tags)'}
-                            </div>
-                          </div>
-                        )}
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   )}
 

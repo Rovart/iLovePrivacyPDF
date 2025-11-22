@@ -252,7 +252,7 @@ print_step "Checking for Ollama..."
 if check_command ollama; then
     print_success "Ollama is installed"
     print_step "To start Ollama, run: ollama serve"
-    print_step "To pull a vision model, run: ollama pull gemma3:12b"
+    print_step "To pull a vision model, run: ollama pull deepseek-ocr"
 else
     print_warning "Ollama not installed"
     print_step "To install Ollama, visit: https://ollama.ai"

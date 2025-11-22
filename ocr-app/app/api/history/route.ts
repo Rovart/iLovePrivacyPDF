@@ -204,6 +204,93 @@ export async function DELETE(request: NextRequest) {
     const data = await readFile(HISTORY_FILE, 'utf-8');
     let history: HistoryItem[] = JSON.parse(data);
 
+    // Find the item to delete
+    const itemToDelete = history.find(item => item.id === id);
+
+    // Delete associated files
+    if (itemToDelete) {
+      const outputDir = getOutputsDir();
+      const { unlink } = await import('fs/promises');
+
+      // Helper function to extract filename from URL
+      const extractFilename = (url: string): string | null => {
+        if (!url) return null;
+
+        if (url.includes('?path=')) {
+          const pathMatch = url.match(/path=outputs%2F(.+?)(?:&|$)/);
+          if (pathMatch) return decodeURIComponent(pathMatch[1].split('?')[0]);
+
+          const pathMatch2 = url.match(/path=outputs\/(.+?)(?:&|$)/);
+          if (pathMatch2) return pathMatch2[1].split('?')[0];
+        }
+
+        if (url.includes('/api/serve-image')) {
+          const urlObj = new URL(url, 'http://localhost');
+          const pathParam = urlObj.searchParams.get('path');
+          if (pathParam) {
+            return pathParam.replace('outputs/', '');
+          }
+        }
+
+        const simpleMatch = url.split('?')[0].split('/').pop();
+        if (simpleMatch && !simpleMatch.includes('serve-image')) {
+          return simpleMatch;
+        }
+
+        return null;
+      };
+
+      // Delete markdown file
+      if (itemToDelete.markdownUrl) {
+        const filename = extractFilename(itemToDelete.markdownUrl);
+        if (filename) {
+          try {
+            const filePath = join(outputDir, filename);
+            if (existsSync(filePath)) {
+              await unlink(filePath);
+              console.log(`Deleted markdown: ${filename}`);
+            }
+          } catch (err) {
+            console.error(`Failed to delete markdown ${filename}:`, err);
+          }
+        }
+      }
+
+      // Delete PDF file
+      if (itemToDelete.pdfUrl) {
+        const filename = extractFilename(itemToDelete.pdfUrl);
+        if (filename) {
+          try {
+            const filePath = join(outputDir, filename);
+            if (existsSync(filePath)) {
+              await unlink(filePath);
+              console.log(`Deleted PDF: ${filename}`);
+            }
+          } catch (err) {
+            console.error(`Failed to delete PDF ${filename}:`, err);
+          }
+        }
+      }
+
+      // Delete image files
+      if (itemToDelete.images && itemToDelete.images.length > 0) {
+        for (const imgUrl of itemToDelete.images) {
+          const filename = extractFilename(imgUrl);
+          if (filename) {
+            try {
+              const filePath = join(outputDir, filename);
+              if (existsSync(filePath)) {
+                await unlink(filePath);
+                console.log(`Deleted image: ${filename}`);
+              }
+            } catch (err) {
+              console.error(`Failed to delete image ${filename}:`, err);
+            }
+          }
+        }
+      }
+    }
+
     // Filter out the item
     history = history.filter(item => item.id !== id);
 
@@ -223,6 +310,26 @@ export async function DELETE(request: NextRequest) {
 // PUT - Clear all history
 export async function PUT() {
   try {
+    // Delete all files in outputs directory
+    const outputDir = getOutputsDir();
+    if (existsSync(outputDir)) {
+      const { readdir, unlink } = await import('fs/promises');
+      const files = await readdir(outputDir);
+
+      for (const file of files) {
+        // Skip the .history.json file and hidden files
+        if (file === '.history.json' || file.startsWith('.')) continue;
+
+        try {
+          const filePath = join(outputDir, file);
+          await unlink(filePath);
+          console.log(`Deleted: ${file}`);
+        } catch (err) {
+          console.error(`Failed to delete ${file}:`, err);
+        }
+      }
+    }
+
     // Clear history file
     await writeFile(HISTORY_FILE, JSON.stringify([], null, 2));
 

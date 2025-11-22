@@ -31,7 +31,7 @@ enum Commands {
         output: Option<PathBuf>,
 
         /// OCR model to use
-        #[arg(short, long, default_value = "NexaAI/DeepSeek-OCR-GGUF:BF16")]
+        #[arg(short, long, default_value = "deepseek-ocr")]
         model: String,
 
         /// Custom prompt for Ollama models (optional)
@@ -41,6 +41,10 @@ enum Commands {
         /// Use coordinates in OCR output
         #[arg(long)]
         use_coordinates: bool,
+
+        /// Disable grounding mode for NexaAI models (use free OCR instead of structured document OCR)
+        #[arg(long)]
+        disable_grounding_mode: bool,
     },
 
     /// Process multiple images in a directory
@@ -54,7 +58,7 @@ enum Commands {
         output: PathBuf,
 
         /// OCR model to use
-        #[arg(short, long, default_value = "NexaAI/DeepSeek-OCR-GGUF:BF16")]
+        #[arg(short, long, default_value = "deepseek-ocr")]
         model: String,
 
         /// Join all images into one before OCR (experimental)
@@ -196,8 +200,10 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::ProcessImage { input, output, model, custom_prompt, use_coordinates } => {
-            let markdown = process_image(input, model, custom_prompt.as_deref(), *use_coordinates).await?;
+        Commands::ProcessImage { input, output, model, custom_prompt, use_coordinates, disable_grounding_mode } => {
+            println!("DEBUG: ProcessImage called. disable_grounding_mode={}", disable_grounding_mode);
+            let use_grounding_mode = !disable_grounding_mode;
+            let markdown = process_image(input, model, custom_prompt.as_deref(), *use_coordinates, use_grounding_mode).await?;
 
             if let Some(output_path) = output {
                 fs::write(output_path, &markdown)?;
@@ -323,9 +329,9 @@ fn split_pdf(input: &Path, output: &Path, pages_str: &str) -> Result<()> {
     anyhow::bail!("PDF split requires qpdf or pdftk to be installed. Install with: brew install qpdf or brew install pdftk-java")
 }
 
-async fn process_image(image_path: &Path, model: &str, custom_prompt: Option<&str>, use_coordinates: bool) -> Result<String> {
-    // Default to grounding mode enabled for backward compatibility
-    process_image_with_mode(image_path, model, custom_prompt, true, use_coordinates).await
+async fn process_image(image_path: &Path, model: &str, custom_prompt: Option<&str>, use_coordinates: bool, use_grounding_mode: bool) -> Result<String> {
+    // Pass the grounding mode flag correctly
+    process_image_with_mode(image_path, model, custom_prompt, use_grounding_mode, use_coordinates).await
 }
 
 async fn process_image_with_mode(image_path: &Path, model: &str, custom_prompt: Option<&str>, use_grounding_mode: bool, use_coordinates: bool) -> Result<String> {
@@ -343,43 +349,109 @@ async fn process_image_with_mode(image_path: &Path, model: &str, custom_prompt: 
 
     // Detect if this is an Ollama model (doesn't contain "NexaAI" or "GGUF")
     let is_ollama = !model.contains("NexaAI") && !model.contains("GGUF");
+    
+    // Detect if this is DeepSeek-OCR model (works best without extra instructions)
+    let is_deepseek = model.to_lowercase().contains("deepseek-ocr");
+    
+    // For DeepSeek models, ignore custom prompts
+    let effective_custom_prompt = if is_deepseek { None } else { custom_prompt };
 
     // Build the base prompt text based on model type and grounding mode
-    let base_prompt = if let Some(custom) = custom_prompt {
+    let base_prompt = if let Some(custom) = effective_custom_prompt {
         // For custom prompts, include grounding tag only for NexaAI with grounding mode enabled
         if is_ollama {
             format!("{} {}", filename, custom)
         } else if use_grounding_mode {
-            format!("{} <|grounding|>{}", filename, custom)
+            format!("{}\n<|grounding|>{}", filename, custom)
         } else {
             format!("{} {}", filename, custom)
         }
     } else {
         // Default prompts based on model type and grounding mode
         if is_ollama {
-            format!("{} Convert the document to markdown.", filename)
+            if use_grounding_mode {
+                // Check if it's deepseek-ocr which supports grounding
+                if is_deepseek {
+                    format!("{}\n<|grounding|>Convert the document to markdown.", filename)
+                } else {
+                    format!("{}\nConvert the document to markdown.", filename)
+                }
+            } else {
+                format!("{}\nExtract the text in the image.", filename)
+            }
         } else if use_grounding_mode {
-            format!("{} <|grounding|>Convert the document to markdown.", filename)
+            format!("{}\n<|grounding|>Convert the document to markdown.", filename)
         } else {
-            format!("{} Free OCR.", filename)
+            format!("{}\nExtract the text in the image.", filename)
         }
     };
 
-    // Add automatic instructions for Ollama models
-    let prompt_text = if is_ollama {
+    // Add automatic instructions for Ollama models (BUT NOT DeepSeek)
+    let prompt_text = if is_ollama && !is_deepseek {
+
         let mut enhanced = base_prompt;
         enhanced.push_str("\n\nIMPORTANT INSTRUCTIONS:");
-        enhanced.push_str("\n- Return ONLY the OCR result. No thinking, explanations, or markdown code blocks.");
+        enhanced.push_str("\n- Return ONLY the OCR result. No thinking or explanations. Do not wrap the output in markdown code fences (```).");
         enhanced.push_str("\n- Fix grammar mistakes when confident.");
+        // Coordinate instructions are not added for DeepSeek models, as they handle coordinates differently.
         if use_coordinates {
-            enhanced.push_str("\n- Include coordinate information for text positioning.");
+            enhanced.push_str("\n- Include coordinate information using the format: <|det|>[[x1,y1,x2,y2]]</|det|> followed by the text.");
         }
         enhanced
     } else {
         base_prompt
     };
 
-    // Prepare OCR request
+    // Debug: Print the full prompt
+    println!("=== OCR PROMPT ===");
+    println!("Model: {}", model);
+    println!("Use Coordinates: {}", use_coordinates);
+    println!("Prompt Text:");
+    println!("{}", prompt_text);
+    println!("==================");
+
+    // For DeepSeek-OCR on Ollama, use the CLI directly to ensure correct behavior
+    if is_deepseek && is_ollama {
+        println!("Using Ollama CLI for DeepSeek-OCR");
+        
+        // Construct the prompt exactly as requested: "/path/to/image\n<|grounding|>Convert..."
+        // Note: prompt_text already contains the filename/path at the start
+        // But we need to make sure we pass the absolute path to the image
+        let abs_image_path = std::fs::canonicalize(image_path)?;
+        let cli_prompt = if use_grounding_mode {
+             format!("{}\n<|grounding|>Convert the document to markdown.", abs_image_path.display())
+        } else {
+             format!("{}\nExtract the text in the image.", abs_image_path.display())
+        };
+        
+        println!("CLI Prompt: {}", cli_prompt);
+
+        let output = std::process::Command::new("ollama")
+            .arg("run")
+            .arg(model)
+            .arg(&cli_prompt)
+            .output()
+            .context("Failed to execute ollama run")?;
+            
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("Ollama CLI error: {}", stderr);
+        }
+        
+        let markdown = String::from_utf8_lossy(&output.stdout).to_string();
+        
+        // Save raw response to file for debugging
+        let raw_output_path = "/tmp/deepseek_raw_output.txt";
+        std::fs::write(raw_output_path, &markdown)?;
+        println!("=== RAW OCR OUTPUT SAVED ===");
+        println!("Saved to: {}", raw_output_path);
+        println!("Content length: {} chars", markdown.len());
+        println!("============================");
+
+        return Ok(clean_markdown(&markdown));
+    }
+
+    // Prepare OCR request for other models (API)
     let request = OcrRequest {
         model: model.to_string(),
         messages: vec![Message {
@@ -425,7 +497,15 @@ async fn process_image_with_mode(image_path: &Path, model: &str, custom_prompt: 
         .first()
         .map(|c| c.message.content.clone())
         .unwrap_or_default();
-
+        
+    // Save raw response to file for debugging
+    let raw_output_path = "/tmp/deepseek_raw_output.txt";
+    std::fs::write(raw_output_path, &markdown)?;
+    println!("=== RAW OCR OUTPUT SAVED ===");
+    println!("Saved to: {}", raw_output_path);
+    println!("Content length: {} chars", markdown.len());
+    println!("============================");
+    
     Ok(clean_markdown(&markdown))
 }
 
@@ -623,7 +703,15 @@ async fn process_directory_joined(dir_path: &Path, model: &str, custom_prompt: O
     } else {
         // Default prompts based on model and grounding mode
         if is_ollama {
-            "Combined document with multiple pages. Convert the entire document to markdown, preserving the structure and content from all pages.".to_string()
+            if use_grounding_mode {
+                if model.to_lowercase().contains("deepseek-ocr") {
+                    "Combined document with multiple pages. <|grounding|>Convert the entire document to markdown, preserving the structure and content from all pages.".to_string()
+                } else {
+                    "Combined document with multiple pages. Convert the entire document to markdown. Preserve all headings, lists, tables, and layout structure from all pages.".to_string()
+                }
+            } else {
+                "Combined document with multiple pages. Free OCR.".to_string()
+            }
         } else if use_grounding_mode {
             "Combined document with multiple pages. <|grounding|>Convert the entire document to markdown, preserving the structure and content from all pages.".to_string()
         } else {
@@ -699,7 +787,7 @@ async fn process_directory_joined(dir_path: &Path, model: &str, custom_prompt: O
 
 async fn process_pdf(pdf_path: &Path, temp_dir: &Path, use_native: bool) -> Result<String> {
     // PDF processing uses default model
-    const DEFAULT_MODEL: &str = "NexaAI/DeepSeek-OCR-GGUF:BF16";
+    const DEFAULT_MODEL: &str = "deepseek-ocr";
     
     // Create temp directory
     fs::create_dir_all(temp_dir)?;
@@ -766,9 +854,9 @@ fn clean_markdown(text: &str) -> String {
     let re_ref = Regex::new(r"(?s)<\|ref\|>.*?<\|/ref\|>").unwrap();
     // Remove specific OCR tags line by line, but keep det tags
     // Match common OCR tags: <|grounding|>, <|think|>, <|OCR|>, etc.
-    let re_grounding = Regex::new(r"(?m)^<\|grounding\|>.*$").unwrap();
-    let re_think = Regex::new(r"(?m)^<\|think\|>.*$").unwrap();
-    let re_ocr = Regex::new(r"(?m)^<\|OCR\|>.*$").unwrap();
+    let re_grounding = Regex::new(r"<\|grounding\|>").unwrap();
+    let re_think = Regex::new(r"(?s)<\|think\|>.*?<\|/think\|>").unwrap(); // Remove think blocks entirely
+    let re_ocr = Regex::new(r"<\|OCR\|>").unwrap();
     // Remove multiple consecutive newlines (3 or more)
     let re_newlines = Regex::new(r"\n{3,}").unwrap();
     // Remove lines with just spaces/tabs
@@ -795,7 +883,8 @@ fn clean_markdown(text: &str) -> String {
 
 fn clean_markdown_for_plain(text: &str) -> String {
     // Remove ALL OCR tags including <|det|> for plain text mode
-    let re_all_tags = Regex::new(r"(?m)^<\|[^|]+\|>.*$").unwrap();
+    // Remove ALL OCR tags including <|det|> for plain text mode
+    let re_all_tags = Regex::new(r"<\|[^|]+\|>").unwrap();
     let re_det_tags = Regex::new(r"<\|det\|>.*?<\|/det\|>").unwrap();
     let re_ref = Regex::new(r"(?s)<\|ref\|>.*?<\|/ref\|>").unwrap();
     let re_newlines = Regex::new(r"\n{3,}").unwrap();
@@ -1381,6 +1470,7 @@ struct TextBlock {
 
 fn parse_ocr_blocks(markdown: &str) -> Vec<TextBlock> {
     let mut blocks = Vec::new();
+    println!("parse_ocr_blocks: Processing {} bytes of markdown", markdown.len());
     let lines: Vec<&str> = markdown.lines().collect();
     let mut next_block_needs_page_break = false;
     let mut current_image_index = 0;
@@ -1451,6 +1541,7 @@ fn parse_ocr_blocks(markdown: &str) -> Vec<TextBlock> {
         i += 1;
     }
 
+    println!("parse_ocr_blocks: Found {} coordinate blocks", blocks.len());
     blocks
 }
 
