@@ -74,14 +74,14 @@ The application uses **locally-hosted** OCR models (no cloud API calls):
 #### Ollama (Default)
 ```bash
 # Install Ollama from https://ollama.ai
-# Pull a vision model (downloads to your machine)
-ollama pull llama3.2-vision:latest
+# Pull the deepseek-ocr model (downloads to your machine)
+ollama pull deepseek-ocr
 
 # Start server (local only, no internet required)
 ollama serve
 ```
 
-**Recommended models**: `llama3.2-vision`, `gemma3:12b`, `qwen2-vl`
+**Recommended model**: `deepseek-ocr`
 
 #### NexaAI DeepSeek-OCR (Alternative)
 ```bash
